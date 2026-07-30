@@ -12,6 +12,7 @@ const App = {
       sel.innerHTML = '<option value="">🌍 Todas las granjas</option>' +
         this.farms.map(f => `<option value="${f.id}" ${current == f.id ? 'selected' : ''}>${f.name}</option>`).join('') +
         '<option value="new">➕ Nueva granja...</option>';
+      document.getElementById('deleteFarmBtn').style.display = current ? 'block' : 'none';
     } catch (e) { console.error('Error loading farms:', e); }
   },
 
@@ -27,6 +28,19 @@ const App = {
     } else {
       API.setFarmId('');
     }
+    this.loadFarms();
+    this.navigate(this.currentPage);
+  },
+
+  async deleteFarm() {
+    const id = API.getFarmId();
+    if (!id) return;
+    const farm = this.farms.find(f => f.id == id);
+    if (!farm) return;
+    if (!confirm(`¿Eliminar "${farm.name}"? Se borrarán TODOS los datos de esta granja.`)) return;
+    if (!confirm(`⚠️ Confirmación final: ¿estás SEGURO? No hay vuelta atrás.`)) return;
+    await API.delete(`/api/farms/${id}`);
+    API.setFarmId('');
     this.loadFarms();
     this.navigate(this.currentPage);
   },
