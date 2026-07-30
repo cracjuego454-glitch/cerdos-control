@@ -51,6 +51,24 @@ const API = {
   saveSale(data) { return this.post('/api/sales', data); },
   deleteSale(id) { return this.delete(`/api/sales/${id}`); },
 
+  // Batches
+  getBatches() { return this.get('/api/batches'); },
+  saveBatch(data) { return data.id ? this.put(`/api/batches/${data.id}`, data) : this.post('/api/batches', data); },
+  deleteBatch(id) { return this.delete(`/api/batches/${id}`); },
+
+  // Inventory
+  getInventoryCategories() { return this.get('/api/inventory/categories'); },
+  getInventoryItems(params) { const q = new URLSearchParams(params).toString(); return this.get(`/api/inventory/items${q ? '?' + q : ''}`); },
+  saveInventoryItem(data) { return data.id ? this.put(`/api/inventory/items/${data.id}`, data) : this.post('/api/inventory/items', data); },
+  deleteInventoryItem(id) { return this.delete(`/api/inventory/items/${id}`); },
+  getInventoryMovements(id) { return this.get(`/api/inventory/items/${id}/movements`); },
+  saveInventoryMovement(data) { return this.post('/api/inventory/movements', data); },
+
+  // Daily Logs
+  getDailyLogs(params) { const q = new URLSearchParams(params).toString(); return this.get(`/api/daily_logs${q ? '?' + q : ''}`); },
+  saveDailyLog(data) { return data.id ? this.put(`/api/daily_logs/${data.id}`, data) : this.post('/api/daily_logs', data); },
+  deleteDailyLog(id) { return this.delete(`/api/daily_logs/${id}`); },
+
   // Reports
   getSummary() { return this.get('/api/reports/summary'); },
   getPigReport(id) { return this.get(`/api/reports/pig/${id}`); }

@@ -16,11 +16,13 @@ function q(sql, ...params) {
 // ========== PIGS API ==========
 app.get('/api/pigs', (req, res) => {
   try {
-    const { status } = req.query;
-    const stmt = status
-      ? db.prepare('SELECT * FROM pigs WHERE status = ? ORDER BY identifier')
-      : db.prepare('SELECT * FROM pigs ORDER BY identifier');
-    res.json(status ? stmt.all(status) : stmt.all());
+    const { status, batch_id } = req.query;
+    let sql = 'SELECT p.*, b.name as batch_name FROM pigs p LEFT JOIN batches b ON p.batch_id = b.id WHERE 1=1';
+    const params = [];
+    if (status) { sql += ' AND p.status = ?'; params.push(status); }
+    if (batch_id) { sql += ' AND p.batch_id = ?'; params.push(batch_id); }
+    sql += ' ORDER BY p.identifier';
+    res.json(db.prepare(sql).all(...params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -34,11 +36,11 @@ app.get('/api/pigs/:id', (req, res) => {
 
 app.post('/api/pigs', (req, res) => {
   try {
-    const { identifier, name, breed, birth_date, purchase_date, purchase_cost, notes } = req.body;
+    const { identifier, name, breed, birth_date, purchase_date, purchase_cost, notes, batch_id } = req.body;
     if (!identifier) return res.status(400).json({ error: 'Identificador requerido' });
     db.prepare(
-      'INSERT INTO pigs (identifier, name, breed, birth_date, purchase_date, purchase_cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(identifier, name || null, breed || null, birth_date || null, purchase_date || null, purchase_cost || 0, notes || null);
+      'INSERT INTO pigs (identifier, name, breed, birth_date, purchase_date, purchase_cost, notes, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(identifier, name || null, breed || null, birth_date || null, purchase_date || null, purchase_cost || 0, notes || null, batch_id || null);
     const row = db.prepare('SELECT last_insert_rowid() as id').get();
     res.json({ id: row.id });
   } catch (e) {
@@ -49,10 +51,10 @@ app.post('/api/pigs', (req, res) => {
 
 app.put('/api/pigs/:id', (req, res) => {
   try {
-    const { identifier, name, breed, birth_date, purchase_date, purchase_cost, status, notes } = req.body;
+    const { identifier, name, breed, birth_date, purchase_date, purchase_cost, status, notes, batch_id } = req.body;
     db.prepare(
-      "UPDATE pigs SET identifier=?, name=?, breed=?, birth_date=?, purchase_date=?, purchase_cost=?, status=?, notes=?, updated_at=datetime('now','localtime') WHERE id=?"
-    ).run(identifier, name, breed, birth_date, purchase_date, purchase_cost, status || 'active', notes, req.params.id);
+      "UPDATE pigs SET identifier=?, name=?, breed=?, birth_date=?, purchase_date=?, purchase_cost=?, status=?, notes=?, batch_id=?, updated_at=datetime('now','localtime') WHERE id=?"
+    ).run(identifier, name, breed, birth_date, purchase_date, purchase_cost, status || 'active', notes, batch_id || null, req.params.id);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -235,9 +237,14 @@ app.get('/api/reports/summary', (req, res) => {
        ORDER BY w.date DESC`
     ).all();
 
+    const batchesCount = db.prepare('SELECT COUNT(*) as count FROM batches').get();
+    const lowStockItems = db.prepare('SELECT * FROM inventory_items WHERE current_qty <= min_qty ORDER BY name').all();
+
     res.json({
       activePigs: activePigs.count,
       totalPigs: totalPigs.count,
+      batchesCount: batchesCount.count,
+      lowStockItems,
       totalFeedCost: totalFeed.total,
       totalExpenses: totalExpenses.total,
       totalSales: totalSales.total,
@@ -354,6 +361,144 @@ app.post('/api/partners/:id/transactions', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ========== BATCHES API ==========
+app.get('/api/batches', (req, res) => {
+  try {
+    const batches = db.prepare(`
+      SELECT b.*, (SELECT COUNT(*) FROM pigs WHERE batch_id = b.id) as pig_count
+      FROM batches b ORDER BY b.name
+    `).all();
+    res.json(batches);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/batches', (req, res) => {
+  try {
+    const { name, start_date, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+    db.prepare('INSERT INTO batches (name, start_date, notes) VALUES (?, ?, ?)')
+      .run(name, start_date || null, notes || null);
+    const row = db.prepare('SELECT last_insert_rowid() as id').get();
+    res.json({ id: row.id });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Ya existe un lote con ese nombre' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/batches/:id', (req, res) => {
+  try {
+    const { name, start_date, notes } = req.body;
+    db.prepare("UPDATE batches SET name=?, start_date=?, notes=?, updated_at=datetime('now','localtime') WHERE id=?")
+      .run(name, start_date || null, notes || null, req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/batches/:id', (req, res) => {
+  try {
+    db.prepare('UPDATE pigs SET batch_id = NULL WHERE batch_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM batches WHERE id = ?').run(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ========== INVENTORY API ==========
+app.get('/api/inventory/categories', (req, res) => {
+  try { res.json(db.prepare('SELECT * FROM inventory_categories ORDER BY name').all()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/inventory/items', (req, res) => {
+  try {
+    const { category_id, low_stock } = req.query;
+    let sql = `SELECT i.*, c.name as category_name FROM inventory_items i LEFT JOIN inventory_categories c ON i.category_id = c.id WHERE 1=1`;
+    const params = [];
+    if (category_id) { sql += ' AND i.category_id = ?'; params.push(category_id); }
+    if (low_stock) { sql += ' AND i.current_qty <= i.min_qty'; }
+    sql += ' ORDER BY i.name';
+    res.json(db.prepare(sql).all(...params));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/inventory/items', (req, res) => {
+  try {
+    const { name, category_id, current_qty, unit, min_qty, unit_cost, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+    db.prepare('INSERT INTO inventory_items (name, category_id, current_qty, unit, min_qty, unit_cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(name, category_id || null, current_qty || 0, unit || 'kg', min_qty || 0, unit_cost || 0, notes || null);
+    const row = db.prepare('SELECT last_insert_rowid() as id').get();
+    res.json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/inventory/items/:id', (req, res) => {
+  try {
+    const { name, category_id, current_qty, unit, min_qty, unit_cost, notes } = req.body;
+    db.prepare("UPDATE inventory_items SET name=?, category_id=?, current_qty=?, unit=?, min_qty=?, unit_cost=?, notes=?, updated_at=datetime('now','localtime') WHERE id=?")
+      .run(name, category_id || null, current_qty || 0, unit || 'kg', min_qty || 0, unit_cost || 0, notes || null, req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/inventory/items/:id', (req, res) => {
+  try { db.prepare('DELETE FROM inventory_items WHERE id = ?').run(req.params.id); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/inventory/items/:id/movements', (req, res) => {
+  try { res.json(db.prepare('SELECT * FROM inventory_movements WHERE item_id = ? ORDER BY date DESC, id DESC').all(req.params.id)); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/inventory/movements', (req, res) => {
+  try {
+    const { item_id, date, type, quantity, description } = req.body;
+    if (!item_id || !date || !type || !quantity) return res.status(400).json({ error: 'item_id, date, type y quantity requeridos' });
+    db.prepare('INSERT INTO inventory_movements (item_id, date, type, quantity, description) VALUES (?, ?, ?, ?, ?)')
+      .run(item_id, date, type, quantity, description || null);
+    db.prepare('UPDATE inventory_items SET current_qty = current_qty + ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?')
+      .run(type === 'in' ? quantity : -quantity, item_id);
+    const row = db.prepare('SELECT last_insert_rowid() as id').get();
+    res.json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ========== DAILY LOGS API ==========
+app.get('/api/daily_logs', (req, res) => {
+  try {
+    const { from, to, limit } = req.query;
+    let sql = 'SELECT * FROM daily_logs WHERE 1=1';
+    const params = [];
+    if (from) { sql += ' AND date >= ?'; params.push(from); }
+    if (to) { sql += ' AND date <= ?'; params.push(to); }
+    sql += ' ORDER BY date DESC, id DESC';
+    if (limit) { sql += ' LIMIT ?'; params.push(parseInt(limit)); }
+    res.json(db.prepare(sql).all(...params));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/daily_logs', (req, res) => {
+  try {
+    const { date, title, content } = req.body;
+    if (!date) return res.status(400).json({ error: 'Fecha requerida' });
+    db.prepare('INSERT INTO daily_logs (date, title, content) VALUES (?, ?, ?)')
+      .run(date, title || null, content || null);
+    const row = db.prepare('SELECT last_insert_rowid() as id').get();
+    res.json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/daily_logs/:id', (req, res) => {
+  try {
+    const { date, title, content } = req.body;
+    db.prepare('UPDATE daily_logs SET date=?, title=?, content=? WHERE id=?')
+      .run(date, title || null, content || null, req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/daily_logs/:id', (req, res) => {
+  try { db.prepare('DELETE FROM daily_logs WHERE id = ?').run(req.params.id); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ========== BACKUP / RESTORE ==========
 app.get('/api/backup', (req, res) => {
   try {
@@ -367,7 +512,12 @@ app.get('/api/backup', (req, res) => {
       weight: db.prepare('SELECT * FROM weight_records').all(),
       health: db.prepare('SELECT * FROM health_records').all(),
       partners: db.prepare('SELECT * FROM partners').all(),
-      partner_transactions: db.prepare('SELECT * FROM partner_transactions').all()
+      partner_transactions: db.prepare('SELECT * FROM partner_transactions').all(),
+      batches: db.prepare('SELECT * FROM batches').all(),
+      inventory_categories: db.prepare('SELECT * FROM inventory_categories').all(),
+      inventory_items: db.prepare('SELECT * FROM inventory_items').all(),
+      inventory_movements: db.prepare('SELECT * FROM inventory_movements').all(),
+      daily_logs: db.prepare('SELECT * FROM daily_logs').all()
     };
     res.json(backup);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -378,7 +528,7 @@ app.post('/api/restore', (req, res) => {
     const data = req.body;
     if (!data || !data.pigs) return res.status(400).json({ error: 'Respaldos inválido' });
     db.exec('PRAGMA foreign_keys=OFF');
-    ['partner_transactions', 'partners', 'health_records', 'weight_records', 'sales', 'expenses', 'feeding_records', 'pigs'].forEach(t => {
+    ['inventory_movements', 'inventory_items', 'inventory_categories', 'daily_logs', 'batches', 'partner_transactions', 'partners', 'health_records', 'weight_records', 'sales', 'expenses', 'feeding_records', 'pigs'].forEach(t => {
       db.prepare(`DELETE FROM ${t}`).run();
     });
     const insertPig = db.prepare('INSERT INTO pigs (id, identifier, name, breed, birth_date, purchase_date, purchase_cost, status, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -397,8 +547,18 @@ app.post('/api/restore', (req, res) => {
     (data.partners || []).forEach(r => insertPartner.run(r.id, r.name, r.investment, r.investment_type, r.date, r.phone, r.notes, r.created_at, r.updated_at));
     const insertPTx = db.prepare('INSERT INTO partner_transactions (id, partner_id, date, type, amount, description, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     (data.partner_transactions || []).forEach(r => insertPTx.run(r.id, r.partner_id, r.date, r.type, r.amount, r.description, r.notes, r.created_at));
+    const insertBatch = db.prepare('INSERT INTO batches (id, name, start_date, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+    (data.batches || []).forEach(r => insertBatch.run(r.id, r.name, r.start_date, r.notes, r.created_at, r.updated_at));
+    const insertInvCat = db.prepare('INSERT INTO inventory_categories (id, name) VALUES (?, ?)');
+    (data.inventory_categories || []).forEach(r => insertInvCat.run(r.id, r.name));
+    const insertInvItem = db.prepare('INSERT INTO inventory_items (id, name, category_id, current_qty, unit, min_qty, unit_cost, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    (data.inventory_items || []).forEach(r => insertInvItem.run(r.id, r.name, r.category_id, r.current_qty, r.unit, r.min_qty, r.unit_cost, r.notes, r.created_at, r.updated_at));
+    const insertInvMov = db.prepare('INSERT INTO inventory_movements (id, item_id, date, type, quantity, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    (data.inventory_movements || []).forEach(r => insertInvMov.run(r.id, r.item_id, r.date, r.type, r.quantity, r.description, r.created_at));
+    const insertLog = db.prepare('INSERT INTO daily_logs (id, date, title, content, created_at) VALUES (?, ?, ?, ?, ?)');
+    (data.daily_logs || []).forEach(r => insertLog.run(r.id, r.date, r.title, r.content, r.created_at));
     db.exec('PRAGMA foreign_keys=ON');
-    res.json({ ok: true, count: { pigs: data.pigs.length, feeding: (data.feeding || []).length, expenses: (data.expenses || []).length, sales: (data.sales || []).length, weight: (data.weight || []).length, health: (data.health || []).length, partners: (data.partners || []).length } });
+    res.json({ ok: true, count: { pigs: data.pigs.length, feeding: (data.feeding || []).length, expenses: (data.expenses || []).length, sales: (data.sales || []).length, weight: (data.weight || []).length, health: (data.health || []).length, partners: (data.partners || []).length, batches: (data.batches || []).length, inventory_items: (data.inventory_items || []).length, daily_logs: (data.daily_logs || []).length } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

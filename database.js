@@ -111,6 +111,53 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now','localtime')),
     FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    start_date TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS inventory_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+  );
+
+  CREATE TABLE IF NOT EXISTS inventory_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category_id INTEGER,
+    current_qty REAL DEFAULT 0,
+    unit TEXT DEFAULT 'kg',
+    min_qty REAL DEFAULT 0,
+    unit_cost REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (category_id) REFERENCES inventory_categories(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS inventory_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    type TEXT NOT NULL,
+    quantity REAL NOT NULL,
+    description TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS daily_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    title TEXT,
+    content TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+  );
 `);
 
 // Add partner_id to expenses (if not exists)
@@ -118,6 +165,14 @@ try { db.exec('ALTER TABLE expenses ADD COLUMN partner_id INTEGER REFERENCES par
 try { db.exec('ALTER TABLE feeding_records ADD COLUMN partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL'); } catch (e) {}
 try { db.exec('ALTER TABLE pigs ADD COLUMN partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL'); } catch (e) {}
 try { db.exec("ALTER TABLE partners ADD COLUMN status TEXT DEFAULT 'active'"); } catch (e) {}
+try { db.exec('ALTER TABLE pigs ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL'); } catch (e) {}
+try { db.exec('ALTER TABLE sales ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL'); } catch (e) {}
+
+// Insert default inventory categories
+const cats = ['Alimento', 'Medicina', 'Equipo', 'Otros'];
+cats.forEach(name => {
+  try { db.prepare('INSERT OR IGNORE INTO inventory_categories (name) VALUES (?)').run(name); } catch (e) {}
+});
 
 // Create indexes
 const indexSqls = [

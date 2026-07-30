@@ -1,21 +1,24 @@
 const Pigs = {
   pigs: [],
+  batches: [],
   async render() {
     this.pigs = await API.getPigs();
+    this.batches = await API.getBatches();
     return `
       <div class="toolbar"><h2>🐖 Registro de Cerdos</h2><button class="btn btn-primary" onclick="Pigs.openForm()">+ Nuevo Cerdo</button></div>
       <div class="card">
         <div class="table-container">
           <table>
-            <tr><th>ID</th><th>Nombre</th><th>Raza</th><th>Compra</th><th>Costo</th><th>Estado</th><th>Acciones</th></tr>
+            <tr><th>ID</th><th>Nombre</th><th>Raza</th><th>Compra</th><th>Costo</th><th>Estado</th><th>Lote</th><th>Acciones</th></tr>
             ${this.pigs.length ? this.pigs.map(p => `
               <tr>
                 <td>${p.identifier}</td><td>${p.name || '-'}</td><td>${p.breed || '-'}</td>
                 <td>${p.purchase_date || '-'}</td><td>$${(p.purchase_cost || 0).toFixed(2)}</td>
                 <td><span class="badge badge-${p.status}">${p.status}</span></td>
+                <td>${p.batch_name || '-'}</td>
                 <td><button class="btn btn-sm btn-primary" onclick="Pigs.openForm(${p.id})">✏️</button> <button class="btn btn-sm btn-danger" onclick="Pigs.delete(${p.id})">🗑️</button></td>
               </tr>
-            `).join('') : '<tr><td colspan="7" class="empty"><p>No hay cerdos registrados</p></td></tr>'}
+            `).join('') : '<tr><td colspan="8" class="empty"><p>No hay cerdos registrados</p></td></tr>'}
           </table>
         </div>
       </div>
@@ -35,6 +38,12 @@ const Pigs = {
             <div class="form-row">
               <div class="form-group"><label>Fecha de Compra</label><input type="date" name="purchase_date" id="pigPurchaseDate"></div>
               <div class="form-group"><label>Costo de Compra ($)</label><input type="number" step="0.01" name="purchase_cost" id="pigPurchaseCost"></div>
+            </div>
+            <div class="form-group"><label>Lote</label>
+              <select name="batch_id" id="pigBatch">
+                <option value="">Sin lote</option>
+                ${this.batches.map(b => `<option value="${b.id}">${b.name}</option>`).join('')}
+              </select>
             </div>
             <div class="form-group"><label>Notas</label><textarea name="notes" id="pigNotes" rows="2"></textarea></div>
             <div class="form-actions">
@@ -62,6 +71,7 @@ const Pigs = {
       document.getElementById('pigBirth').value = p.birth_date || '';
       document.getElementById('pigPurchaseDate').value = p.purchase_date || '';
       document.getElementById('pigPurchaseCost').value = p.purchase_cost || '';
+      document.getElementById('pigBatch').value = p.batch_id || '';
       document.getElementById('pigNotes').value = p.notes || '';
     } else {
       document.getElementById('pigModalTitle').textContent = 'Nuevo Cerdo';
@@ -79,6 +89,7 @@ const Pigs = {
       birth_date: document.getElementById('pigBirth').value || null,
       purchase_date: document.getElementById('pigPurchaseDate').value || null,
       purchase_cost: parseFloat(document.getElementById('pigPurchaseCost').value) || 0,
+      batch_id: parseInt(document.getElementById('pigBatch').value) || null,
       notes: document.getElementById('pigNotes').value || null
     };
     await API.savePig(data);
