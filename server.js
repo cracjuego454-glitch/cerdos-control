@@ -243,6 +243,21 @@ app.get('/api/reports/summary', (req, res) => {
       totalSales: totalSales.total,
       totalFeedKg: totalFeedKg.total,
       profit: totalSales.total - totalExpenses.total - totalFeed.total,
+      upcomingHealth: db.prepare(`
+        SELECT h.*, p.identifier as pig_identifier
+        FROM health_records h JOIN pigs p ON h.pig_id = p.id
+        WHERE h.next_due_date IS NOT NULL AND h.next_due_date >= date('now','-1 day')
+        ORDER BY h.next_due_date ASC LIMIT 10
+      `).all(),
+      feedConversion: db.prepare(`
+        SELECT p.id, p.identifier,
+          COALESCE((SELECT SUM(quantity_kg) FROM feeding_records WHERE pig_id = p.id), 0) as total_feed_kg,
+          (SELECT COALESCE(MAX(weight_kg),0) FROM weight_records WHERE pig_id = p.id) as last_weight,
+          (SELECT COALESCE(MIN(weight_kg),0) FROM weight_records WHERE pig_id = p.id) as first_weight
+        FROM pigs p
+        WHERE p.status = 'active'
+        HAVING total_feed_kg > 0 AND last_weight > 0
+      `).all(),
       recentWeights: recentWeight,
       partners: db.prepare(`
         SELECT p.*,

@@ -23,6 +23,20 @@ const Dashboard = {
           <div id="recentWeights">${s.recentWeights.length ? `<table><tr><th>Cerdo</th><th>Peso</th><th>Fecha</th></tr>${s.recentWeights.slice(0,10).map(w => `<tr><td>${w.identifier}</td><td>${w.weight_kg} kg</td><td>${w.date}</td></tr>`).join('')}</table>` : '<div class="empty"><p>Aún no hay registros de peso</p></div>'}</div>
         </div>
       </div>
+      <div class="grid-2">
+        <div class="card">
+          <h2>⏰ Próximos eventos de salud</h2>
+          ${s.upcomingHealth && s.upcomingHealth.length ? `<table><tr><th>Cerdo</th><th>Evento</th><th>Próximo</th></tr>${s.upcomingHealth.map(h => `<tr><td>${h.pig_identifier}</td><td>${h.record_type}</td><td>${h.next_due_date}</td></tr>`).join('')}</table>` : '<div class="empty"><p>No hay eventos próximos</p></div>'}
+        </div>
+        <div class="card">
+          <h2>📈 Conversión alimenticia</h2>
+          ${s.feedConversion && s.feedConversion.length ? `<table><tr><th>Cerdo</th><th>Kg comido</th><th>Kg ganado</th><th>Conversión</th></tr>${s.feedConversion.map(f => {
+            const gained = f.last_weight - f.first_weight;
+            const conv = gained > 0 ? (f.total_feed_kg / gained).toFixed(2) : '-';
+            return `<tr><td>${f.identifier}</td><td>${f.total_feed_kg.toFixed(1)}</td><td>${gained.toFixed(1)}</td><td><strong>${conv}</strong></td></tr>`;
+          }).join('')}</table><p style="font-size:0.8rem;color:#888;margin-top:6px">Menor número = más eficiente</p>` : '<div class="empty"><p>Faltan datos de peso y comida</p></div>'}
+        </div>
+      </div>
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
           <h2 style="margin:0">📋 Resumen Financiero</h2>

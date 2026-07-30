@@ -3,7 +3,7 @@ const Reports = {
   async render() {
     this.pigs = await API.getPigs();
     return `
-      <h2>📋 Reportes</h2>
+      <div class="toolbar"><h2>📋 Reportes</h2><button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / PDF</button></div>
       <div class="grid-2">
         <div class="card">
           <h2>📊 Resumen General</h2>
@@ -32,6 +32,10 @@ const Reports = {
     const r = await API.getPigReport(id);
     const container = document.getElementById('pigReport');
     const totalInvestment = r.pig.purchase_cost + r.totalFeedCost + r.totalHealthCost;
+    const firstW = r.weightRecords.length > 1 ? r.weightRecords[0].weight_kg : 0;
+    const lastW = r.weightRecords.length > 0 ? r.weightRecords[r.weightRecords.length-1].weight_kg : 0;
+    const gained = lastW - firstW;
+    const conversion = r.totalFeedKg > 0 && gained > 0 ? (r.totalFeedKg / gained).toFixed(2) : '-';
     container.innerHTML = `
       <hr style="margin:12px 0">
       <h3>${r.pig.identifier} ${r.pig.name ? '- ' + r.pig.name : ''}</h3>
@@ -39,6 +43,8 @@ const Reports = {
         <tr><td>Costo de compra</td><td><strong>$${r.pig.purchase_cost.toFixed(2)}</strong></td></tr>
         <tr><td>Total alimento</td><td><strong>$${r.totalFeedCost.toFixed(2)}</strong> (${r.totalFeedKg.toFixed(1)} kg)</td></tr>
         <tr><td>Total salud</td><td><strong>$${r.totalHealthCost.toFixed(2)}</strong></td></tr>
+        <tr><td>Peso inicial → final</td><td>${firstW.toFixed(1)} → ${lastW.toFixed(1)} kg (${gained > 0 ? '+' : ''}${gained.toFixed(1)} kg)</td></tr>
+        <tr><td>Conversión alimenticia</td><td><strong>${conversion}</strong> kg de comida / kg ganado</td></tr>
         <tr style="font-weight:700"><td>Inversión total</td><td><strong>$${totalInvestment.toFixed(2)}</strong></td></tr>
       </table>
       ${r.weightRecords.length > 0 ? `
