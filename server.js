@@ -8,9 +8,13 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-function q(sql, ...params) {
+function qAll(sql, params) {
   const stmt = db.prepare(sql);
-  return stmt;
+  return params && params.length ? stmt.all(...params) : stmt.all();
+}
+function qGet(sql, params) {
+  const stmt = db.prepare(sql);
+  return params && params.length ? stmt.get(...params) : stmt.get();
 }
 
 // ========== FARMS API ==========
@@ -54,7 +58,7 @@ app.get('/api/pigs', (req, res) => {
     if (batch_id) { sql += ' AND p.batch_id = ?'; params.push(batch_id); }
     if (farm_id) { sql += ' AND p.farm_id = ?'; params.push(farm_id); }
     sql += ' ORDER BY p.identifier';
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -110,7 +114,7 @@ app.get('/api/feeding', (req, res) => {
     if (to) { sql += ' AND f.date <= ?'; params.push(to); }
     sql += ' ORDER BY f.date DESC, f.id DESC';
     if (limit) { sql += ' LIMIT ?'; params.push(parseInt(limit)); }
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -143,7 +147,7 @@ app.get('/api/expenses', (req, res) => {
     if (farm_id) { sql += ' AND e.farm_id = ?'; params.push(farm_id); }
     sql += ' ORDER BY e.date DESC, e.id DESC';
     if (limit) { sql += ' LIMIT ?'; params.push(parseInt(limit)); }
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -173,7 +177,7 @@ app.get('/api/sales', (req, res) => {
     if (farm_id) { sql += ' AND s.farm_id = ?'; params.push(farm_id); }
     sql += ' ORDER BY s.date DESC, s.id DESC';
     if (limit) { sql += ' LIMIT ?'; params.push(parseInt(limit)); }
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -207,7 +211,7 @@ app.get('/api/weight', (req, res) => {
     if (to) { sql += ' AND w.date <= ?'; params.push(to); }
     sql += ' ORDER BY w.date DESC, w.id DESC';
     if (limit) { sql += ' LIMIT ?'; params.push(parseInt(limit)); }
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -239,7 +243,7 @@ app.get('/api/health', (req, res) => {
     if (to) { sql += ' AND h.date <= ?'; params.push(to); }
     sql += ' ORDER BY h.date DESC, h.id DESC';
     if (limit) { sql += ' LIMIT ?'; params.push(parseInt(limit)); }
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -262,25 +266,21 @@ app.delete('/api/health/:id', (req, res) => {
 app.get('/api/reports/summary', (req, res) => {
   try {
     const { farm_id } = req.query;
-    const f = farm_id ? ' WHERE farm_id = ?' : '';
-    const f2 = farm_id ? ' AND farm_id = ?' : '';
-    const fp = farm_id ? ' AND p.farm_id = ?' : '';
-    const pv = [farm_id].filter(Boolean);
-    const activePigs = db.prepare(`SELECT COUNT(*) as count FROM pigs WHERE status = 'active'${f2}`).get(...pv);
-    const totalPigs = db.prepare(`SELECT COUNT(*) as count FROM pigs${f}`).get(...pv);
-    const totalFeed = db.prepare(`SELECT COALESCE(SUM(total_cost),0) as total FROM feeding_records${f}`).get(...pv);
-    const totalExpenses = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM expenses${f}`).get(...pv);
-    const totalSales = db.prepare(`SELECT COALESCE(SUM(total_amount),0) as total FROM sales${f}`).get(...pv);
-    const totalFeedKg = db.prepare(`SELECT COALESCE(SUM(quantity_kg),0) as total FROM feeding_records${f}`).get(...pv);
-    const recentWeight = db.prepare(
-      `SELECT w.*, p.identifier, p.name FROM weight_records w
-       JOIN pigs p ON w.pig_id = p.id
-       WHERE w.id IN (SELECT MAX(id) FROM weight_records GROUP BY pig_id)${fp}
-       ORDER BY w.date DESC`
-    ).all(...pv);
+    const hasFarm = farm_id && farm_id !== '';
+    const f = hasFarm ? ' WHERE farm_id = ?' : '';
+    const f2 = hasFarm ? ' AND farm_id = ?' : '';
+    const fp = hasFarm ? ' AND p.farm_id = ?' : '';
+    const pv = hasFarm ? [farm_id] : [];
+    const activePigs = (hasFarm ? db.prepare(`SELECT COUNT(*) as count FROM pigs WHERE status = 'active'${f2}`).get(farm_id) : db.prepare("SELECT COUNT(*) as count FROM pigs WHERE status = 'active'").get());
+    const totalPigs = (hasFarm ? db.prepare(`SELECT COUNT(*) as count FROM pigs${f}`).get(farm_id) : db.prepare('SELECT COUNT(*) as count FROM pigs').get());
+    const totalFeed = (hasFarm ? db.prepare(`SELECT COALESCE(SUM(total_cost),0) as total FROM feeding_records${f}`).get(farm_id) : db.prepare('SELECT COALESCE(SUM(total_cost),0) as total FROM feeding_records').get());
+    const totalExpenses = (hasFarm ? db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM expenses${f}`).get(farm_id) : db.prepare('SELECT COALESCE(SUM(amount),0) as total FROM expenses').get());
+    const totalSales = (hasFarm ? db.prepare(`SELECT COALESCE(SUM(total_amount),0) as total FROM sales${f}`).get(farm_id) : db.prepare('SELECT COALESCE(SUM(total_amount),0) as total FROM sales').get());
+    const totalFeedKg = (hasFarm ? db.prepare(`SELECT COALESCE(SUM(quantity_kg),0) as total FROM feeding_records${f}`).get(farm_id) : db.prepare('SELECT COALESCE(SUM(quantity_kg),0) as total FROM feeding_records').get());
+    const recentWeight = (hasFarm ? db.prepare(`SELECT w.*, p.identifier, p.name FROM weight_records w JOIN pigs p ON w.pig_id = p.id WHERE w.id IN (SELECT MAX(id) FROM weight_records GROUP BY pig_id)${fp} ORDER BY w.date DESC`).all(farm_id) : db.prepare(`SELECT w.*, p.identifier, p.name FROM weight_records w JOIN pigs p ON w.pig_id = p.id WHERE w.id IN (SELECT MAX(id) FROM weight_records GROUP BY pig_id) ORDER BY w.date DESC`).all());
 
-    const batchesCount = db.prepare(`SELECT COUNT(*) as count FROM batches${f}`).get(...pv);
-    const lowStockItems = db.prepare(`SELECT * FROM inventory_items WHERE current_qty <= min_qty${f2} ORDER BY name`).all(...pv);
+    const batchesCount = (hasFarm ? db.prepare(`SELECT COUNT(*) as count FROM batches${f}`).get(farm_id) : db.prepare('SELECT COUNT(*) as count FROM batches').get());
+    const lowStockItems = (hasFarm ? db.prepare(`SELECT * FROM inventory_items WHERE current_qty <= min_qty${f2} ORDER BY name`).all(farm_id) : db.prepare('SELECT * FROM inventory_items WHERE current_qty <= min_qty ORDER BY name').all());
 
     res.json({
       activePigs: activePigs.count,
@@ -292,32 +292,10 @@ app.get('/api/reports/summary', (req, res) => {
       totalSales: totalSales.total,
       totalFeedKg: totalFeedKg.total,
       profit: totalSales.total - totalExpenses.total - totalFeed.total,
-      upcomingHealth: db.prepare(`
-        SELECT h.*, p.identifier as pig_identifier
-        FROM health_records h JOIN pigs p ON h.pig_id = p.id
-        WHERE h.next_due_date IS NOT NULL AND h.next_due_date >= date('now','-1 day')${fp}
-        ORDER BY h.next_due_date ASC LIMIT 10
-      `).all(...pv),
-      feedConversion: db.prepare(`
-        SELECT * FROM (
-          SELECT p.id, p.identifier,
-            COALESCE((SELECT SUM(quantity_kg) FROM feeding_records WHERE pig_id = p.id), 0) as total_feed_kg,
-            (SELECT COALESCE(MAX(weight_kg),0) FROM weight_records WHERE pig_id = p.id) as last_weight,
-            (SELECT COALESCE(MIN(weight_kg),0) FROM weight_records WHERE pig_id = p.id) as first_weight
-          FROM pigs p
-          WHERE p.status = 'active'${fp}
-        ) WHERE total_feed_kg > 0 AND last_weight > 0
-      `).all(...pv),
+      upcomingHealth: (hasFarm ? db.prepare(`SELECT h.*, p.identifier as pig_identifier FROM health_records h JOIN pigs p ON h.pig_id = p.id WHERE h.next_due_date IS NOT NULL AND h.next_due_date >= date('now','-1 day')${fp} ORDER BY h.next_due_date ASC LIMIT 10`).all(farm_id) : db.prepare(`SELECT h.*, p.identifier as pig_identifier FROM health_records h JOIN pigs p ON h.pig_id = p.id WHERE h.next_due_date IS NOT NULL AND h.next_due_date >= date('now','-1 day') ORDER BY h.next_due_date ASC LIMIT 10`).all()),
+      feedConversion: (hasFarm ? db.prepare(`SELECT * FROM (SELECT p.id, p.identifier, COALESCE((SELECT SUM(quantity_kg) FROM feeding_records WHERE pig_id = p.id), 0) as total_feed_kg, (SELECT COALESCE(MAX(weight_kg),0) FROM weight_records WHERE pig_id = p.id) as last_weight, (SELECT COALESCE(MIN(weight_kg),0) FROM weight_records WHERE pig_id = p.id) as first_weight FROM pigs p WHERE p.status = 'active'${fp}) WHERE total_feed_kg > 0 AND last_weight > 0`).all(farm_id) : db.prepare(`SELECT * FROM (SELECT p.id, p.identifier, COALESCE((SELECT SUM(quantity_kg) FROM feeding_records WHERE pig_id = p.id), 0) as total_feed_kg, (SELECT COALESCE(MAX(weight_kg),0) FROM weight_records WHERE pig_id = p.id) as last_weight, (SELECT COALESCE(MIN(weight_kg),0) FROM weight_records WHERE pig_id = p.id) as first_weight FROM pigs p WHERE p.status = 'active') WHERE total_feed_kg > 0 AND last_weight > 0`).all()),
       recentWeights: recentWeight,
-      partners: db.prepare(`
-        SELECT p.*,
-          COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) as total_expenses_paid,
-          COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) as total_feed_paid,
-          COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0) as total_pigs_paid,
-          COALESCE((SELECT SUM(amount) FROM partner_transactions WHERE partner_id = p.id AND type = 'return'), 0) as total_returned,
-          (p.investment + COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0)) as total_invested
-        FROM partners p WHERE p.status = 'active'${fp} ORDER BY p.name
-      `).all(...pv)
+      partners: (hasFarm ? db.prepare(`SELECT p.*, COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) as total_expenses_paid, COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) as total_feed_paid, COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0) as total_pigs_paid, COALESCE((SELECT SUM(amount) FROM partner_transactions WHERE partner_id = p.id AND type = 'return'), 0) as total_returned, (p.investment + COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0)) as total_invested FROM partners p WHERE p.status = 'active'${fp} ORDER BY p.name`).all(farm_id) : db.prepare(`SELECT p.*, COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) as total_expenses_paid, COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) as total_feed_paid, COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0) as total_pigs_paid, COALESCE((SELECT SUM(amount) FROM partner_transactions WHERE partner_id = p.id AND type = 'return'), 0) as total_returned, (p.investment + COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0)) as total_invested FROM partners p WHERE p.status = 'active' ORDER BY p.name`).all())
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -348,7 +326,7 @@ app.get('/api/partners', (req, res) => {
     const params = [];
     if (farm_id) { sql += ' AND p.farm_id = ?'; params.push(farm_id); }
     sql += ' GROUP BY p.id ORDER BY p.name';
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -423,7 +401,7 @@ app.get('/api/batches', (req, res) => {
     const params = [];
     if (farm_id) { sql += ' AND b.farm_id = ?'; params.push(farm_id); }
     sql += ' ORDER BY b.name';
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -472,7 +450,7 @@ app.get('/api/inventory/items', (req, res) => {
     if (low_stock) { sql += ' AND i.current_qty <= i.min_qty'; }
     if (farm_id) { sql += ' AND i.farm_id = ?'; params.push(farm_id); }
     sql += ' ORDER BY i.name';
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -528,7 +506,7 @@ app.get('/api/daily_logs', (req, res) => {
     if (farm_id) { sql += ' AND farm_id = ?'; params.push(farm_id); }
     sql += ' ORDER BY date DESC, id DESC';
     if (limit) { sql += ' LIMIT ?'; params.push(parseInt(limit)); }
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -568,7 +546,7 @@ app.get('/api/feed-orders', (req, res) => {
     if (farm_id) { sql += ' AND farm_id = ?'; params.push(farm_id); }
     sql += ' ORDER BY order_date DESC, id DESC';
     if (limit) { sql += ' LIMIT ?'; params.push(parseInt(limit)); }
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -653,15 +631,11 @@ app.get('/api/reports/sales-projection', (req, res) => {
   try {
     const targetWeight = parseFloat(req.query.target_weight) || 100;
     const farm_id = req.query.farm_id;
-    const f = farm_id ? ' AND p.farm_id = ?' : '';
-    const pv = [farm_id].filter(Boolean);
-    const pigs = db.prepare(`
-      SELECT p.id, p.identifier, p.sex,
-        COALESCE((SELECT MAX(weight_kg) FROM weight_records WHERE pig_id = p.id), 0) as current_weight,
-        (SELECT COUNT(*) FROM weight_records WHERE pig_id = p.id) as weight_count,
-        (SELECT date FROM weight_records WHERE pig_id = p.id ORDER BY date DESC LIMIT 1) as last_weigh_date
-      FROM pigs p WHERE p.status = 'active'${f}
-    `).all(...pv);
+    const hasFarm = farm_id && farm_id !== '';
+    const f = hasFarm ? ' AND p.farm_id = ?' : '';
+    const pigs = hasFarm
+      ? db.prepare(`SELECT p.id, p.identifier, p.sex, COALESCE((SELECT MAX(weight_kg) FROM weight_records WHERE pig_id = p.id), 0) as current_weight, (SELECT COUNT(*) FROM weight_records WHERE pig_id = p.id) as weight_count, (SELECT date FROM weight_records WHERE pig_id = p.id ORDER BY date DESC LIMIT 1) as last_weigh_date FROM pigs p WHERE p.status = 'active'${f}`).all(farm_id)
+      : db.prepare(`SELECT p.id, p.identifier, p.sex, COALESCE((SELECT MAX(weight_kg) FROM weight_records WHERE pig_id = p.id), 0) as current_weight, (SELECT COUNT(*) FROM weight_records WHERE pig_id = p.id) as weight_count, (SELECT date FROM weight_records WHERE pig_id = p.id ORDER BY date DESC LIMIT 1) as last_weigh_date FROM pigs p WHERE p.status = 'active'`).all();
     const result = [];
     for (const pig of pigs) {
       if (pig.weight_count >= 2) {
@@ -687,21 +661,19 @@ app.get('/api/reports/feed-projection', (req, res) => {
   try {
     const days = parseInt(req.query.days) || 7;
     const farm_id = req.query.farm_id;
-    const f = farm_id ? ' AND p.farm_id = ?' : '';
-    const f2 = farm_id ? ' AND farm_id = ?' : '';
-    const pv = [farm_id].filter(Boolean);
-    const activePigs = db.prepare(`SELECT COUNT(*) as c FROM pigs WHERE status = 'active'${f}`).get(...pv).c;
-    const feedByPig = db.prepare(`
-      SELECT f.pig_id, AVG(f.quantity_kg) as avg_daily, COUNT(*) as days_count
-      FROM feeding_records f JOIN pigs p ON f.pig_id = p.id
-      WHERE p.status = 'active'${f}
-      GROUP BY f.pig_id
-    `).all(...pv);
+    const hasFarm = farm_id && farm_id !== '';
+    const activePigs = hasFarm
+      ? db.prepare("SELECT COUNT(*) as c FROM pigs WHERE status = 'active' AND farm_id = ?").get(farm_id).c
+      : db.prepare("SELECT COUNT(*) as c FROM pigs WHERE status = 'active'").get().c;
+    const feedByPig = hasFarm
+      ? db.prepare(`SELECT f.pig_id, AVG(f.quantity_kg) as avg_daily, COUNT(*) as days_count FROM feeding_records f JOIN pigs p ON f.pig_id = p.id WHERE p.status = 'active' AND p.farm_id = ? GROUP BY f.pig_id`).all(farm_id)
+      : db.prepare(`SELECT f.pig_id, AVG(f.quantity_kg) as avg_daily, COUNT(*) as days_count FROM feeding_records f JOIN pigs p ON f.pig_id = p.id WHERE p.status = 'active' GROUP BY f.pig_id`).all();
     const pigsWithFeed = feedByPig.length;
     const avgPerPig = pigsWithFeed > 0 ? feedByPig.reduce((s, f) => s + f.avg_daily, 0) / pigsWithFeed : 0;
     const totalProjected = avgPerPig * activePigs * days;
-    // Feed cost projection
-    const recentFeedCost = db.prepare(`SELECT AVG(cost_per_kg) as avg_cost FROM feeding_records WHERE cost_per_kg > 0 AND date >= date('now','-30 days')${f2}`).get(...pv).avg_cost || 0;
+    const recentFeedCost = hasFarm
+      ? (db.prepare("SELECT AVG(cost_per_kg) as avg_cost FROM feeding_records WHERE cost_per_kg > 0 AND date >= date('now','-30 days') AND farm_id = ?").get(farm_id).avg_cost || 0)
+      : (db.prepare("SELECT AVG(cost_per_kg) as avg_cost FROM feeding_records WHERE cost_per_kg > 0 AND date >= date('now','-30 days')").get().avg_cost || 0);
     res.json({ activePigs, pigsWithFeed, avgPerPig: Math.round(avgPerPig * 100) / 100, totalProjected: Math.round(totalProjected * 100) / 100, avgCostPerKg: Math.round(recentFeedCost * 100) / 100, costProjected: Math.round(totalProjected * recentFeedCost * 100) / 100, days });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -751,7 +723,7 @@ app.get('/api/reproduction', (req, res) => {
     if (sow_id) { sql += ' AND r.sow_id = ?'; params.push(sow_id); }
     if (farm_id) { sql += ' AND r.farm_id = ?'; params.push(farm_id); }
     sql += ' ORDER BY r.mating_date DESC, r.id DESC';
-    res.json(db.prepare(sql).all(...params));
+    res.json(qAll(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
