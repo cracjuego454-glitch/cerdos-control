@@ -113,6 +113,11 @@ db.exec(`
   );
 `);
 
+// Add partner_id to expenses (if not exists)
+try { db.exec('ALTER TABLE expenses ADD COLUMN partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL'); } catch (e) {}
+try { db.exec('ALTER TABLE feeding_records ADD COLUMN partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL'); } catch (e) {}
+try { db.exec('ALTER TABLE pigs ADD COLUMN partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL'); } catch (e) {}
+
 // Create indexes
 const indexSqls = [
   'CREATE INDEX IF NOT EXISTS idx_feeding_pig ON feeding_records(pig_id)',

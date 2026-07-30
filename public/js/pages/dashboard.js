@@ -41,17 +41,21 @@ const Dashboard = {
       ${s.partners && s.partners.length > 0 ? `
       <div class="card">
         <h2>🤝 Reparto de Ganancias entre Socios</h2>
+        <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Calculado sobre el total real invertido (aporte inicial + gastos pagados por cada socio)</p>
         <table>
-          <tr><th>Socio</th><th>Inversión</th><th>%</th><th>Ganancia que le corresponde</th></tr>
+          <tr><th>Socio</th><th>Aporte inicial</th><th>Gastos pagados</th><th>Inversión total</th><th>%</th><th>Ganancia que le corresponde</th></tr>
           ${(() => {
-            const total = s.partners.reduce((a, p) => a + p.investment, 0);
+            const totalInv = s.partners.reduce((a, p) => a + p.total_invested, 0);
             const profit = s.profit;
             return s.partners.map(p => {
-              const pct = total > 0 ? (p.investment / total * 100) : 0;
+              const extra = p.total_expenses_paid + p.total_feed_paid + p.total_pigs_paid;
+              const pct = totalInv > 0 ? (p.total_invested / totalInv * 100) : 0;
               const share = profit * (pct / 100);
               return `<tr>
                 <td><strong>${p.name}</strong></td>
                 <td>$${p.investment.toFixed(2)}</td>
+                <td>$${extra.toFixed(2)}</td>
+                <td><strong>$${p.total_invested.toFixed(2)}</strong></td>
                 <td>${pct.toFixed(1)}%</td>
                 <td style="color:${share >= 0 ? '#2e7d32' : '#c62828'};font-weight:700">$${share.toFixed(2)}</td>
               </tr>`;

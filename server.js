@@ -100,7 +100,7 @@ app.delete('/api/feeding/:id', (req, res) => {
 app.get('/api/expenses', (req, res) => {
   try {
     const { category, from, to, limit } = req.query;
-    let sql = `SELECT e.*, p.identifier as pig_identifier FROM expenses e LEFT JOIN pigs p ON e.pig_id = p.id WHERE 1=1`;
+    let sql = `SELECT e.*, p.identifier as pig_identifier, pr.name as partner_name FROM expenses e LEFT JOIN pigs p ON e.pig_id = p.id LEFT JOIN partners pr ON e.partner_id = pr.id WHERE 1=1`;
     const params = [];
     if (category) { sql += ' AND e.category = ?'; params.push(category); }
     if (from) { sql += ' AND e.date >= ?'; params.push(from); }
@@ -113,10 +113,10 @@ app.get('/api/expenses', (req, res) => {
 
 app.post('/api/expenses', (req, res) => {
   try {
-    const { date, category, description, amount, pig_id, notes } = req.body;
+    const { date, category, description, amount, pig_id, partner_id, notes } = req.body;
     if (!date || !category || !amount) return res.status(400).json({ error: 'date, category y amount requeridos' });
-    db.prepare('INSERT INTO expenses (date, category, description, amount, pig_id, notes) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(date, category, description || null, amount, pig_id || null, notes || null);
+    db.prepare('INSERT INTO expenses (date, category, description, amount, pig_id, partner_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(date, category, description || null, amount, pig_id || null, partner_id || null, notes || null);
     const row = db.prepare('SELECT last_insert_rowid() as id').get();
     res.json({ id: row.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -244,7 +244,15 @@ app.get('/api/reports/summary', (req, res) => {
       totalFeedKg: totalFeedKg.total,
       profit: totalSales.total - totalExpenses.total - totalFeed.total,
       recentWeights: recentWeight,
-      partners: db.prepare('SELECT * FROM partners ORDER BY name').all()
+      partners: db.prepare(`
+        SELECT p.*,
+          COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) as total_expenses_paid,
+          COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) as total_feed_paid,
+          COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0) as total_pigs_paid,
+          COALESCE((SELECT SUM(amount) FROM partner_transactions WHERE partner_id = p.id AND type = 'return'), 0) as total_returned,
+          (p.investment + COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0)) as total_invested
+        FROM partners p ORDER BY p.name
+      `).all()
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
