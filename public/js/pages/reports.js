@@ -31,22 +31,33 @@ const Reports = {
     if (!id) { document.getElementById('pigReport').innerHTML = ''; return; }
     const r = await API.getPigReport(id);
     const container = document.getElementById('pigReport');
-    const totalInvestment = r.pig.purchase_cost + r.totalFeedCost + r.totalHealthCost;
+    const totalInvestment = r.pig.purchase_cost + r.totalFeedCost + r.totalHealthCost + r.totalExpensesOnPig;
     const firstW = r.weightRecords.length > 1 ? r.weightRecords[0].weight_kg : 0;
     const lastW = r.weightRecords.length > 0 ? r.weightRecords[r.weightRecords.length-1].weight_kg : 0;
     const gained = lastW - firstW;
     const conversion = r.totalFeedKg > 0 && gained > 0 ? (r.totalFeedKg / gained).toFixed(2) : '-';
+    const saleIncome = r.saleRecord ? r.saleRecord.total_amount : 0;
+    const profit = saleIncome - totalInvestment;
     container.innerHTML = `
       <hr style="margin:12px 0">
-      <h3>${r.pig.identifier} ${r.pig.name ? '- ' + r.pig.name : ''}</h3>
+      <h3>${r.pig.identifier} ${r.pig.name ? '- ' + r.pig.name : ''} <span class="badge badge-${r.pig.status}">${r.pig.status}</span></h3>
       <table>
         <tr><td>Costo de compra</td><td><strong>$${r.pig.purchase_cost.toFixed(2)}</strong></td></tr>
         <tr><td>Total alimento</td><td><strong>$${r.totalFeedCost.toFixed(2)}</strong> (${r.totalFeedKg.toFixed(1)} kg)</td></tr>
         <tr><td>Total salud</td><td><strong>$${r.totalHealthCost.toFixed(2)}</strong></td></tr>
+        <tr><td>Otros gastos</td><td><strong>$${r.totalExpensesOnPig.toFixed(2)}</strong></td></tr>
         <tr><td>Peso inicial → final</td><td>${firstW.toFixed(1)} → ${lastW.toFixed(1)} kg (${gained > 0 ? '+' : ''}${gained.toFixed(1)} kg)</td></tr>
         <tr><td>Conversión alimenticia</td><td><strong>${conversion}</strong> kg de comida / kg ganado</td></tr>
         <tr style="font-weight:700"><td>Inversión total</td><td><strong>$${totalInvestment.toFixed(2)}</strong></td></tr>
       </table>
+      ${r.saleRecord ? `
+      <h3 style="margin-top:12px">💰 Venta</h3>
+      <table>
+        <tr><td>Fecha de venta</td><td>${r.saleRecord.date}</td></tr>
+        <tr><td>Comprador</td><td>${r.saleRecord.buyer_name || '-'}</td></tr>
+        <tr><td>Monto de venta</td><td><strong>$${saleIncome.toFixed(2)}</strong></td></tr>
+        <tr style="font-weight:700;background:${profit >= 0 ? '#e8f5e9' : '#fbe9e7'}"><td>${profit >= 0 ? '✅ Ganancia' : '❌ Pérdida'}</td><td style="color:${profit >= 0 ? '#2e7d32' : '#c62828'}"><strong>$${profit.toFixed(2)}</strong></td></tr>
+      </table>` : '<div class="alert alert-info" style="margin-top:12px">🐖 Este cerdo aún está activo — no se ha vendido aún</div>'}
       ${r.weightRecords.length > 0 ? `
         <h3 style="margin-top:12px">⚖️ Evolución de Peso</h3>
         <table>

@@ -289,7 +289,9 @@ app.get('/api/reports/pig/:id', (req, res) => {
     const healthRecords = db.prepare('SELECT * FROM health_records WHERE pig_id = ? ORDER BY date DESC').all(req.params.id);
     const totalFeed = db.prepare('SELECT COALESCE(SUM(total_cost),0) as cost, COALESCE(SUM(quantity_kg),0) as kg FROM feeding_records WHERE pig_id = ?').get(req.params.id);
     const totalHealth = db.prepare('SELECT COALESCE(SUM(cost),0) as total FROM health_records WHERE pig_id = ?').get(req.params.id);
-    res.json({ pig, feedRecords, weightRecords, healthRecords, totalFeedCost: totalFeed.cost, totalFeedKg: totalFeed.kg, totalHealthCost: totalHealth.total });
+    const saleRecord = db.prepare('SELECT * FROM sales WHERE pig_id = ?').get(req.params.id);
+    const totalExpensesOnPig = db.prepare('SELECT COALESCE(SUM(amount),0) as total FROM expenses WHERE pig_id = ?').get(req.params.id);
+    res.json({ pig, feedRecords, weightRecords, healthRecords, saleRecord, totalFeedCost: totalFeed.cost, totalFeedKg: totalFeed.kg, totalHealthCost: totalHealth.total, totalExpensesOnPig: totalExpensesOnPig.total });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
