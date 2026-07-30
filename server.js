@@ -265,23 +265,22 @@ app.get('/api/reports/summary', (req, res) => {
     const f = farm_id ? ' WHERE farm_id = ?' : '';
     const f2 = farm_id ? ' AND farm_id = ?' : '';
     const fp = farm_id ? ' AND p.farm_id = ?' : '';
-    const params = farm_id ? [farm_id] : [];
-    const params2 = farm_id ? [farm_id] : [];
-    const activePigs = db.prepare(`SELECT COUNT(*) as count FROM pigs WHERE status = 'active'${f2}`).get(...params);
-    const totalPigs = db.prepare(`SELECT COUNT(*) as count FROM pigs${f}`).get(...params);
-    const totalFeed = db.prepare(`SELECT COALESCE(SUM(total_cost),0) as total FROM feeding_records${f}`).get(...params);
-    const totalExpenses = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM expenses${f}`).get(...params);
-    const totalSales = db.prepare(`SELECT COALESCE(SUM(total_amount),0) as total FROM sales${f}`).get(...params);
-    const totalFeedKg = db.prepare(`SELECT COALESCE(SUM(quantity_kg),0) as total FROM feeding_records${f}`).get(...params);
+    const pv = [farm_id].filter(Boolean);
+    const activePigs = db.prepare(`SELECT COUNT(*) as count FROM pigs WHERE status = 'active'${f2}`).get(...pv);
+    const totalPigs = db.prepare(`SELECT COUNT(*) as count FROM pigs${f}`).get(...pv);
+    const totalFeed = db.prepare(`SELECT COALESCE(SUM(total_cost),0) as total FROM feeding_records${f}`).get(...pv);
+    const totalExpenses = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM expenses${f}`).get(...pv);
+    const totalSales = db.prepare(`SELECT COALESCE(SUM(total_amount),0) as total FROM sales${f}`).get(...pv);
+    const totalFeedKg = db.prepare(`SELECT COALESCE(SUM(quantity_kg),0) as total FROM feeding_records${f}`).get(...pv);
     const recentWeight = db.prepare(
       `SELECT w.*, p.identifier, p.name FROM weight_records w
        JOIN pigs p ON w.pig_id = p.id
        WHERE w.id IN (SELECT MAX(id) FROM weight_records GROUP BY pig_id)${fp}
        ORDER BY w.date DESC`
-    ).all(...params);
+    ).all(...pv);
 
-    const batchesCount = db.prepare(`SELECT COUNT(*) as count FROM batches${f}`).get(...params);
-    const lowStockItems = db.prepare(`SELECT * FROM inventory_items WHERE current_qty <= min_qty${f2} ORDER BY name`).all(...params);
+    const batchesCount = db.prepare(`SELECT COUNT(*) as count FROM batches${f}`).get(...pv);
+    const lowStockItems = db.prepare(`SELECT * FROM inventory_items WHERE current_qty <= min_qty${f2} ORDER BY name`).all(...pv);
 
     res.json({
       activePigs: activePigs.count,
@@ -298,7 +297,7 @@ app.get('/api/reports/summary', (req, res) => {
         FROM health_records h JOIN pigs p ON h.pig_id = p.id
         WHERE h.next_due_date IS NOT NULL AND h.next_due_date >= date('now','-1 day')${fp}
         ORDER BY h.next_due_date ASC LIMIT 10
-      `).all(...params),
+      `).all(...pv),
       feedConversion: db.prepare(`
         SELECT * FROM (
           SELECT p.id, p.identifier,
@@ -308,7 +307,7 @@ app.get('/api/reports/summary', (req, res) => {
           FROM pigs p
           WHERE p.status = 'active'${fp}
         ) WHERE total_feed_kg > 0 AND last_weight > 0
-      `).all(...params),
+      `).all(...pv),
       recentWeights: recentWeight,
       partners: db.prepare(`
         SELECT p.*,
@@ -318,7 +317,7 @@ app.get('/api/reports/summary', (req, res) => {
           COALESCE((SELECT SUM(amount) FROM partner_transactions WHERE partner_id = p.id AND type = 'return'), 0) as total_returned,
           (p.investment + COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0)) as total_invested
         FROM partners p WHERE p.status = 'active'${fp} ORDER BY p.name
-      `).all(...params)
+      `).all(...pv)
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -655,14 +654,14 @@ app.get('/api/reports/sales-projection', (req, res) => {
     const targetWeight = parseFloat(req.query.target_weight) || 100;
     const farm_id = req.query.farm_id;
     const f = farm_id ? ' AND p.farm_id = ?' : '';
-    const params = farm_id ? [farm_id] : [];
+    const pv = [farm_id].filter(Boolean);
     const pigs = db.prepare(`
       SELECT p.id, p.identifier, p.sex,
         COALESCE((SELECT MAX(weight_kg) FROM weight_records WHERE pig_id = p.id), 0) as current_weight,
         (SELECT COUNT(*) FROM weight_records WHERE pig_id = p.id) as weight_count,
         (SELECT date FROM weight_records WHERE pig_id = p.id ORDER BY date DESC LIMIT 1) as last_weigh_date
       FROM pigs p WHERE p.status = 'active'${f}
-    `).all(...params);
+    `).all(...pv);
     const result = [];
     for (const pig of pigs) {
       if (pig.weight_count >= 2) {
@@ -690,19 +689,19 @@ app.get('/api/reports/feed-projection', (req, res) => {
     const farm_id = req.query.farm_id;
     const f = farm_id ? ' AND p.farm_id = ?' : '';
     const f2 = farm_id ? ' AND farm_id = ?' : '';
-    const params = farm_id ? [farm_id] : [];
-    const activePigs = db.prepare(`SELECT COUNT(*) as c FROM pigs WHERE status = 'active'${f}`).get(...params).c;
+    const pv = [farm_id].filter(Boolean);
+    const activePigs = db.prepare(`SELECT COUNT(*) as c FROM pigs WHERE status = 'active'${f}`).get(...pv).c;
     const feedByPig = db.prepare(`
       SELECT f.pig_id, AVG(f.quantity_kg) as avg_daily, COUNT(*) as days_count
       FROM feeding_records f JOIN pigs p ON f.pig_id = p.id
       WHERE p.status = 'active'${f}
       GROUP BY f.pig_id
-    `).all(...params);
+    `).all(...pv);
     const pigsWithFeed = feedByPig.length;
     const avgPerPig = pigsWithFeed > 0 ? feedByPig.reduce((s, f) => s + f.avg_daily, 0) / pigsWithFeed : 0;
     const totalProjected = avgPerPig * activePigs * days;
     // Feed cost projection
-    const recentFeedCost = db.prepare(`SELECT AVG(cost_per_kg) as avg_cost FROM feeding_records WHERE cost_per_kg > 0 AND date >= date('now','-30 days')${f2}`).get(...params).avg_cost || 0;
+    const recentFeedCost = db.prepare(`SELECT AVG(cost_per_kg) as avg_cost FROM feeding_records WHERE cost_per_kg > 0 AND date >= date('now','-30 days')${f2}`).get(...pv).avg_cost || 0;
     res.json({ activePigs, pigsWithFeed, avgPerPig: Math.round(avgPerPig * 100) / 100, totalProjected: Math.round(totalProjected * 100) / 100, avgCostPerKg: Math.round(recentFeedCost * 100) / 100, costProjected: Math.round(totalProjected * recentFeedCost * 100) / 100, days });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
