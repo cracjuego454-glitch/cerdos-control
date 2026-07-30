@@ -8,7 +8,15 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div id="app">
+  <div id="welcome-screen">
+    <div class="welcome-content">
+      <img src="https://drive.google.com/uc?export=view&id=1GCoHxAz9ixeOzy1N8mGVCtK5yh4peEIY" alt="CerdosControl" class="welcome-logo">
+      <h1 class="welcome-title">🐷 CerdosControl</h1>
+      <p class="welcome-subtitle">Controla tu engorde de forma fácil y rentable</p>
+      <button class="btn btn-welcome" onclick="App.enterApp()">🚀 Iniciar</button>
+    </div>
+  </div>
+  <div id="app" style="display:none">
     <aside id="sidebar">
       <div class="sidebar-header">
         <h1>🐷 CerdosControl</h1>

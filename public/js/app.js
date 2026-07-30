@@ -2,6 +2,15 @@ const App = {
   currentPage: 'dashboard',
   pages: { dashboard: Dashboard, pigs: Pigs, feeding: Feeding, weight: Weight, health: Health, expenses: Expenses, sales: Sales, reports: Reports },
 
+  enterApp() {
+    document.getElementById('welcome-screen').classList.add('fade-out');
+    setTimeout(() => {
+      document.getElementById('welcome-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      this.navigate('dashboard');
+    }, 500);
+  },
+
   async navigate(page) {
     this.currentPage = page;
     document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
@@ -24,7 +33,6 @@ const App = {
         this.navigate(a.dataset.page);
       });
     });
-    this.navigate('dashboard');
   }
 };
 
