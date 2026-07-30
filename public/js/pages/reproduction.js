@@ -19,6 +19,7 @@ const Reproduction = {
                 <td>${r.result || 'Pendiente'}</td>
                 <td>
                   <button class="btn btn-sm btn-primary" onclick="Reproduction.openForm(${r.id})">✏️</button>
+                  ${r.farrowing_date && r.piglets_alive > 0 ? `<button class="btn btn-sm btn-success" onclick="Reproduction.createPiglets(${r.id})">➕ Lechones</button>` : ''}
                   <button class="btn btn-sm btn-danger" onclick="Reproduction.delete(${r.id})">🗑️</button>
                 </td>
               </tr>
@@ -35,6 +36,45 @@ const Reproduction = {
             ${sows.filter(s => s.sex === 'hembra').map(s => `<option value="${s.id}">${s.identifier}${s.name ? ' - ' + s.name : ''}</option>`).join('')}
           </select>
           <div id="reproSowInfo" style="font-size:0.85rem;margin-top:4px"></div>
+        </div>
+      </div>
+      <div id="pigletModal" class="modal">
+        <div class="modal-content">
+          <h2>🐷 Registrar Lechones como Cerdos</h2>
+          <form id="pigletForm" onsubmit="Reproduction.savePiglets(event)">
+            <input type="hidden" id="pigletReproId">
+            <div class="form-group"><label>Prefijo para identificador</label>
+              <input type="text" id="pigletPrefix" placeholder="Ej: LECHON-001" required>
+              <small style="color:#999">Se auto-incrementará (ej: LECHON-001, LECHON-002...)</small>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>¿Cuántos?</label>
+                <input type="number" id="pigletCount" min="1" max="20" required>
+              </div>
+              <div class="form-group"><label>Sexo</label>
+                <select id="pigletSex">
+                  <option value="macho">♂ Machos</option>
+                  <option value="hembra">♀ Hembras</option>
+                  <option value="mixto">♂ ♀ Mixto (mitad y mitad)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group"><label>Lote (opcional)</label>
+              <select id="pigletBatch">
+                <option value="">Sin lote</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Notas comunes</label>
+              <textarea id="pigletNotes" rows="2" placeholder="Ej: Hijos de CERDA-X con VERRACO-Y"></textarea>
+            </div>
+            <div style="background:#f5f5f5;padding:10px;border-radius:8px;margin:8px 0">
+              <strong>🐖 Se crearán: <span id="pigletPreview">0</span> cerdos</strong>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn" onclick="Reproduction.closePigletForm()">Cancelar</button>
+              <button type="submit" class="btn btn-success">✅ Crear Lechones</button>
+            </div>
+          </form>
         </div>
       </div>
       <div id="reproductionModal" class="modal">
@@ -84,6 +124,49 @@ const Reproduction = {
         </div>
       </div>
     `;
+  },
+  async createPiglets(id) {
+    const r = this.records.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('pigletReproId').value = id;
+    document.getElementById('pigletCount').value = r.piglets_alive || 1;
+    document.getElementById('pigletNotes').value = `Hijos de ${r.sow_identifier}${r.boar_identifier ? ' con ' + r.boar_identifier : ''} (monta: ${r.mating_date})`;
+    const prefix = r.sow_identifier + '-L';
+    document.getElementById('pigletPrefix').value = prefix;
+    document.getElementById('pigletPreview').textContent = r.piglets_alive || 1;
+    const batches = await API.getBatches();
+    const batchSel = document.getElementById('pigletBatch');
+    batchSel.innerHTML = '<option value="">Sin lote</option>' + batches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    const countInput = document.getElementById('pigletCount');
+    countInput.oninput = () => {
+      document.getElementById('pigletPreview').textContent = countInput.value || 0;
+    };
+    document.getElementById('pigletModal').classList.add('open');
+  },
+  closePigletForm() { document.getElementById('pigletModal').classList.remove('open'); },
+  async savePiglets(e) {
+    e.preventDefault();
+    const count = parseInt(document.getElementById('pigletCount').value);
+    const prefix = document.getElementById('pigletPrefix').value.trim();
+    const sex = document.getElementById('pigletSex').value;
+    const batchId = parseInt(document.getElementById('pigletBatch').value) || null;
+    const notes = document.getElementById('pigletNotes').value || '';
+    if (!prefix || !count) return alert('Completa los campos');
+    if (!confirm(`¿Crear ${count} cerdos con prefijo "${prefix}"?`)) return;
+    const reproId = document.getElementById('pigletReproId').value;
+    const r = this.records.find(x => x.id === parseInt(reproId));
+    for (let i = 1; i <= count; i++) {
+      const pigSex = sex === 'mixto' ? (i <= Math.ceil(count / 2) ? 'macho' : 'hembra') : sex;
+      const identifier = `${prefix}${String(i).padStart(2, '0')}`;
+      await API.post('/api/pigs', {
+        identifier, sex: pigSex, notes,
+        batch_id: batchId,
+        birth_date: r ? r.farrowing_date || null : null,
+        purchase_cost: 0
+      });
+    }
+    this.closePigletForm();
+    App.navigate('reproduction');
   },
   afterRender() {
     const matingInput = document.getElementById('reproductionMatingDate');
