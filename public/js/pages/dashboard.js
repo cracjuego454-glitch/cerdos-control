@@ -38,6 +38,27 @@ const Dashboard = {
           <tr style="font-weight:700;background:#f0faf0"><td>Ganancia / Pérdida Neta</td><td style="color:${s.profit >= 0 ? '#2e7d32' : '#c62828'}">$${s.profit.toFixed(2)}</td></tr>
         </table>
       </div>
+      ${s.partners && s.partners.length > 0 ? `
+      <div class="card">
+        <h2>🤝 Reparto de Ganancias entre Socios</h2>
+        <table>
+          <tr><th>Socio</th><th>Inversión</th><th>%</th><th>Ganancia que le corresponde</th></tr>
+          ${(() => {
+            const total = s.partners.reduce((a, p) => a + p.investment, 0);
+            const profit = s.profit;
+            return s.partners.map(p => {
+              const pct = total > 0 ? (p.investment / total * 100) : 0;
+              const share = profit * (pct / 100);
+              return `<tr>
+                <td><strong>${p.name}</strong></td>
+                <td>$${p.investment.toFixed(2)}</td>
+                <td>${pct.toFixed(1)}%</td>
+                <td style="color:${share >= 0 ? '#2e7d32' : '#c62828'};font-weight:700">$${share.toFixed(2)}</td>
+              </tr>`;
+            }).join('');
+          })()}
+        </table>
+      </div>` : ''}
     `;
   },
   async afterRender() {

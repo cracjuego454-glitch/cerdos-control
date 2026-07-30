@@ -243,7 +243,8 @@ app.get('/api/reports/summary', (req, res) => {
       totalSales: totalSales.total,
       totalFeedKg: totalFeedKg.total,
       profit: totalSales.total - totalExpenses.total - totalFeed.total,
-      recentWeights: recentWeight
+      recentWeights: recentWeight,
+      partners: db.prepare('SELECT * FROM partners ORDER BY name').all()
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
