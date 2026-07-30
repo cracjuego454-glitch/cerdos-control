@@ -3,7 +3,7 @@ const API = {
   setFarmId(id) { localStorage.setItem('farm_id', id); },
   async get(url) {
     const f = this.getFarmId();
-    if (f && url.startsWith('/api/')) {
+    if (f && url.startsWith('/api/') && !url.includes('farm_id=')) {
       const sep = url.includes('?') ? '&' : '?';
       url += `${sep}farm_id=${f}`;
     }
