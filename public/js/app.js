@@ -45,7 +45,20 @@ const App = {
     this.navigate(this.currentPage);
   },
 
+  toggleDarkMode() {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? '' : 'dark');
+    localStorage.setItem('darkMode', isDark ? '' : 'dark');
+    document.getElementById('darkModeToggle').textContent = isDark ? '🌙 Modo oscuro' : '☀️ Modo claro';
+  },
+
   enterApp() {
+    const saved = localStorage.getItem('darkMode');
+    if (saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.getElementById('darkModeToggle').textContent = '☀️ Modo claro';
+    }
     document.getElementById('welcome-screen').classList.add('fade-out');
     setTimeout(() => {
       document.getElementById('welcome-screen').style.display = 'none';
