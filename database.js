@@ -117,6 +117,7 @@ db.exec(`
 try { db.exec('ALTER TABLE expenses ADD COLUMN partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL'); } catch (e) {}
 try { db.exec('ALTER TABLE feeding_records ADD COLUMN partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL'); } catch (e) {}
 try { db.exec('ALTER TABLE pigs ADD COLUMN partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL'); } catch (e) {}
+try { db.exec("ALTER TABLE partners ADD COLUMN status TEXT DEFAULT 'active'"); } catch (e) {}
 
 // Create indexes
 const indexSqls = [

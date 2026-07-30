@@ -251,7 +251,7 @@ app.get('/api/reports/summary', (req, res) => {
           COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0) as total_pigs_paid,
           COALESCE((SELECT SUM(amount) FROM partner_transactions WHERE partner_id = p.id AND type = 'return'), 0) as total_returned,
           (p.investment + COALESCE((SELECT SUM(amount) FROM expenses WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(total_cost) FROM feeding_records WHERE partner_id = p.id), 0) + COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE partner_id = p.id), 0)) as total_invested
-        FROM partners p ORDER BY p.name
+        FROM partners p WHERE p.status = 'active' ORDER BY p.name
       `).all()
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -284,9 +284,10 @@ app.get('/api/partners', (req, res) => {
 
 app.get('/api/partners/info', (req, res) => {
   try {
-    const partners = db.prepare('SELECT * FROM partners ORDER BY name').all();
+    const partners = db.prepare("SELECT * FROM partners WHERE status = 'active' ORDER BY name").all();
+    const allPartners = db.prepare('SELECT * FROM partners ORDER BY name').all();
     const totalInvestment = partners.reduce((s, p) => s + p.investment, 0);
-    res.json({ partners, totalInvestment });
+    res.json({ partners, allPartners, totalInvestment });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -303,9 +304,14 @@ app.post('/api/partners', (req, res) => {
 
 app.put('/api/partners/:id', (req, res) => {
   try {
-    const { name, investment, investment_type, date, phone, notes } = req.body;
-    db.prepare("UPDATE partners SET name=?, investment=?, investment_type=?, date=?, phone=?, notes=?, updated_at=datetime('now','localtime') WHERE id=?")
-      .run(name, investment, investment_type, date, phone, notes, req.params.id);
+    const { name, investment, investment_type, date, phone, status, notes } = req.body;
+    if (status) {
+      db.prepare("UPDATE partners SET status=?, updated_at=datetime('now','localtime') WHERE id=?")
+        .run(status, req.params.id);
+    } else {
+      db.prepare("UPDATE partners SET name=?, investment=?, investment_type=?, date=?, phone=?, notes=?, updated_at=datetime('now','localtime') WHERE id=?")
+        .run(name, investment, investment_type, date, phone, notes, req.params.id);
+    }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
