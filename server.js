@@ -263,5 +263,5 @@ app.get('/api/reports/pig/:id', (req, res) => {
 
 // ========== START ==========
 app.listen(PORT, () => {
-  console.log(`🚀 Sistema CerdosControl corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 Sistema Cerdos by LOMI corriendo en http://localhost:${PORT}`);
 });
