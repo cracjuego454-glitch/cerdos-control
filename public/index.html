@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CerdosControl</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h1>🐷 CerdosControl</h1>
+      </div>
+      <nav>
+        <a href="#" data-page="dashboard" class="active">📊 Dashboard</a>
+        <a href="#" data-page="pigs">🐖 Cerdos</a>
+        <a href="#" data-page="feeding">🍽️ Alimentación</a>
+        <a href="#" data-page="weight">⚖️ Pesos</a>
+        <a href="#" data-page="health">💊 Salud</a>
+        <a href="#" data-page="expenses">💰 Gastos</a>
+        <a href="#" data-page="sales">📈 Ventas</a>
+        <a href="#" data-page="reports">📋 Reportes</a>
+      </nav>
+    </aside>
+    <main id="main-content">
+      <div id="page-content"></div>
+    </main>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/pages/dashboard.js"></script>
+  <script src="js/pages/pigs.js"></script>
+  <script src="js/pages/feeding.js"></script>
+  <script src="js/pages/weight.js"></script>
+  <script src="js/pages/health.js"></script>
+  <script src="js/pages/expenses.js"></script>
+  <script src="js/pages/sales.js"></script>
+  <script src="js/pages/reports.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
