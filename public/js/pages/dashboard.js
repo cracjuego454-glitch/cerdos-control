@@ -24,7 +24,13 @@ const Dashboard = {
         </div>
       </div>
       <div class="card">
-        <h2>📋 Resumen Financiero</h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <h2 style="margin:0">📋 Resumen Financiero</h2>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="Dashboard.backup()">💾 Respaldo</button>
+            <button class="btn btn-warning" onclick="Dashboard.restore()">📂 Restaurar</button>
+          </div>
+        </div>
         <table>
           <tr><td>Total invertido en alimento</td><td><strong>$${s.totalFeedCost.toFixed(2)}</strong></td></tr>
           <tr><td>Total otros gastos</td><td><strong>$${s.totalExpenses.toFixed(2)}</strong></td></tr>
@@ -45,5 +51,31 @@ const Dashboard = {
       data: { labels: ['Costo Total', 'Cantidad Total'], datasets: [{ label: 'Alimento', data: [s.totalFeedCost, s.totalFeedKg], backgroundColor: ['#4fc3f7', '#ab47bc'] }] },
       options: { scales: { y: { beginAtZero: true } } }
     });
+  },
+  async backup() {
+    const data = await API.get('/api/backup');
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `respaldo-cerdos-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    alert('✅ Respaldo descargado. Guárdalo en un lugar seguro.');
+  },
+  restore() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!confirm('⚠️ Esto borrará TODOS los datos actuales y los reemplazará con el respaldo. ¿Continuar?')) return;
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const result = await API.post('/api/restore', data);
+      alert(`✅ Restaurado: ${result.count.pigs} cerdos, ${result.count.feeding} comidas, ${result.count.expenses} gastos, ${result.count.sales} ventas, ${result.count.weight} pesos, ${result.count.health} salud`);
+      App.navigate('dashboard');
+    };
+    input.click();
   }
 };

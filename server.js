@@ -261,6 +261,48 @@ app.get('/api/reports/pig/:id', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ========== BACKUP / RESTORE ==========
+app.get('/api/backup', (req, res) => {
+  try {
+    const backup = {
+      version: 1,
+      date: new Date().toISOString(),
+      pigs: db.prepare('SELECT * FROM pigs').all(),
+      feeding: db.prepare('SELECT * FROM feeding_records').all(),
+      expenses: db.prepare('SELECT * FROM expenses').all(),
+      sales: db.prepare('SELECT * FROM sales').all(),
+      weight: db.prepare('SELECT * FROM weight_records').all(),
+      health: db.prepare('SELECT * FROM health_records').all()
+    };
+    res.json(backup);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/restore', (req, res) => {
+  try {
+    const data = req.body;
+    if (!data || !data.pigs) return res.status(400).json({ error: 'Respaldos inválido' });
+    db.exec('PRAGMA foreign_keys=OFF');
+    ['health_records', 'weight_records', 'sales', 'expenses', 'feeding_records', 'pigs'].forEach(t => {
+      db.prepare(`DELETE FROM ${t}`).run();
+    });
+    const insertPig = db.prepare('INSERT INTO pigs (id, identifier, name, breed, birth_date, purchase_date, purchase_cost, status, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    data.pigs.forEach(p => insertPig.run(p.id, p.identifier, p.name, p.breed, p.birth_date, p.purchase_date, p.purchase_cost, p.status, p.notes, p.created_at, p.updated_at));
+    const insertFeed = db.prepare('INSERT INTO feeding_records (id, pig_id, date, food_type, quantity_kg, cost_per_kg, total_cost, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    (data.feeding || []).forEach(r => insertFeed.run(r.id, r.pig_id, r.date, r.food_type, r.quantity_kg, r.cost_per_kg, r.total_cost, r.notes, r.created_at));
+    const insertExpense = db.prepare('INSERT INTO expenses (id, date, category, description, amount, pig_id, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    (data.expenses || []).forEach(r => insertExpense.run(r.id, r.date, r.category, r.description, r.amount, r.pig_id, r.notes, r.created_at));
+    const insertSale = db.prepare('INSERT INTO sales (id, date, pig_id, buyer_name, quantity_kg, price_per_kg, total_amount, sale_type, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    (data.sales || []).forEach(r => insertSale.run(r.id, r.date, r.pig_id, r.buyer_name, r.quantity_kg, r.price_per_kg, r.total_amount, r.sale_type, r.notes, r.created_at));
+    const insertWeight = db.prepare('INSERT INTO weight_records (id, pig_id, date, weight_kg, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    (data.weight || []).forEach(r => insertWeight.run(r.id, r.pig_id, r.date, r.weight_kg, r.notes, r.created_at));
+    const insertHealth = db.prepare('INSERT INTO health_records (id, pig_id, date, record_type, description, medicine, cost, next_due_date, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    (data.health || []).forEach(r => insertHealth.run(r.id, r.pig_id, r.date, r.record_type, r.description, r.medicine, r.cost, r.next_due_date, r.notes, r.created_at));
+    db.exec('PRAGMA foreign_keys=ON');
+    res.json({ ok: true, count: { pigs: data.pigs.length, feeding: (data.feeding || []).length, expenses: (data.expenses || []).length, sales: (data.sales || []).length, weight: (data.weight || []).length, health: (data.health || []).length } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ========== START ==========
 app.listen(PORT, () => {
   console.log(`🚀 Sistema Cerdos by LOMI corriendo en http://localhost:${PORT}`);
