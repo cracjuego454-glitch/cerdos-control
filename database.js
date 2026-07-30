@@ -167,6 +167,28 @@ try { db.exec('ALTER TABLE pigs ADD COLUMN partner_id INTEGER REFERENCES partner
 try { db.exec("ALTER TABLE partners ADD COLUMN status TEXT DEFAULT 'active'"); } catch (e) {}
 try { db.exec('ALTER TABLE pigs ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL'); } catch (e) {}
 try { db.exec('ALTER TABLE sales ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL'); } catch (e) {}
+try { db.exec("ALTER TABLE pigs ADD COLUMN sex TEXT DEFAULT 'macho'"); } catch (e) {}
+try { db.exec("ALTER TABLE pigs ADD COLUMN death_date TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE pigs ADD COLUMN death_cause TEXT"); } catch (e) {}
+
+// Reproduction records
+db.exec(`
+  CREATE TABLE IF NOT EXISTS reproduction_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sow_id INTEGER NOT NULL,
+    boar_id INTEGER,
+    mating_date TEXT NOT NULL,
+    expected_farrowing_date TEXT,
+    farrowing_date TEXT,
+    piglets_alive INTEGER DEFAULT 0,
+    piglets_dead INTEGER DEFAULT 0,
+    result TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (sow_id) REFERENCES pigs(id) ON DELETE CASCADE,
+    FOREIGN KEY (boar_id) REFERENCES pigs(id) ON DELETE SET NULL
+  );
+`);
 
 // Insert default inventory categories
 const cats = ['Alimento', 'Medicina', 'Equipo', 'Otros'];
@@ -183,6 +205,8 @@ const indexSqls = [
   'CREATE INDEX IF NOT EXISTS idx_weight_pig ON weight_records(pig_id)',
   'CREATE INDEX IF NOT EXISTS idx_health_pig ON health_records(pig_id)',
   'CREATE INDEX IF NOT EXISTS idx_partner_tx ON partner_transactions(partner_id)',
+  'CREATE INDEX IF NOT EXISTS idx_reproduction_sow ON reproduction_records(sow_id)',
+  'CREATE INDEX IF NOT EXISTS idx_reproduction_date ON reproduction_records(mating_date)',
 ];
 indexSqls.forEach(sql => db.exec(sql));
 

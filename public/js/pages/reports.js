@@ -1,13 +1,14 @@
 const Reports = {
   pigs: [],
+  batches: [],
   async render() {
     this.pigs = await API.getPigs();
+    this.batches = await API.getBatches();
     return `
       <div class="toolbar"><h2>📋 Reportes</h2><button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / PDF</button></div>
       <div class="grid-2">
         <div class="card">
-          <h2>📊 Resumen General</h2>
-          <p>Selecciona un cerdo para ver su reporte detallado</p>
+          <h2>📊 Resumen por Cerdo</h2>
           <div class="form-group">
             <label>Cerdo</label>
             <select id="reportPigId" onchange="Reports.loadPigReport()">
@@ -18,10 +19,45 @@ const Reports = {
           <div id="pigReport"></div>
         </div>
         <div class="card">
-          <h2>📈 Análisis de Alimentación</h2>
-          <div class="chart-container"><canvas id="chartFeedingReport"></canvas></div>
-          <div id="feedingAnalysis"></div>
+          <h2>🏷️ Reporte por Lote</h2>
+          <div class="form-group">
+            <label>Lote</label>
+            <select id="reportBatchId" onchange="Reports.loadBatchReport()">
+              <option value="">Seleccionar...</option>
+              ${this.batches.map(b => `<option value="${b.id}">${b.name} (${b.pig_count} cerdos)</option>`).join('')}
+            </select>
+          </div>
+          <div id="batchReport"></div>
         </div>
+      </div>
+      <div class="card">
+        <h2>📈 Comparar Lotes</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Lotes a comparar</label>
+            <select id="compareBatch1" style="margin-bottom:8px">
+              <option value="">Seleccionar...</option>
+              ${this.batches.map(b => `<option value="${b.id}">${b.name}</option>`).join('')}
+            </select>
+            <select id="compareBatch2" style="margin-bottom:8px">
+              <option value="">Seleccionar...</option>
+              ${this.batches.map(b => `<option value="${b.id}">${b.name}</option>`).join('')}
+            </select>
+            <select id="compareBatch3">
+              <option value="">Seleccionar...</option>
+              ${this.batches.map(b => `<option value="${b.id}">${b.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group" style="align-self:flex-end">
+            <button class="btn btn-primary" onclick="Reports.compareBatches()">Comparar</button>
+          </div>
+        </div>
+        <div id="compareResult"></div>
+      </div>
+      <div class="card">
+        <h2>📈 Análisis de Alimentación</h2>
+        <div class="chart-container"><canvas id="chartFeedingReport"></canvas></div>
+        <div id="feedingAnalysis"></div>
       </div>
     `;
   },
@@ -93,5 +129,71 @@ const Reports = {
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
       });
     }
+  },
+  async loadBatchReport() {
+    const id = parseInt(document.getElementById('reportBatchId').value);
+    if (!id) { document.getElementById('batchReport').innerHTML = ''; return; }
+    const r = await API.get(`/api/reports/batch/${id}`);
+    const c = document.getElementById('batchReport');
+    const investment = r.totals.total_purchase + r.totals.total_feed + r.totals.total_health + r.totals.total_expenses;
+    const profit = r.totals.total_sales - investment;
+    const alive = r.pigs.filter(p => p.status === 'active').length;
+    const sold = r.pigs.filter(p => p.status === 'sold').length;
+    const dead = r.pigs.filter(p => p.status === 'dead').length;
+    c.innerHTML = `
+      <hr style="margin:12px 0">
+      <h3>🏷️ ${r.batch.name}</h3>
+      <table>
+        <tr><td>Total cerdos</td><td><strong>${r.pigs.length}</strong></td></tr>
+        <tr><td>Activos / Vendidos / Muertos</td><td>${alive} / ${sold} / ${dead}</td></tr>
+        <tr><td>Costo de compra</td><td><strong>$${r.totals.total_purchase.toFixed(2)}</strong></td></tr>
+        <tr><td>Total alimento</td><td><strong>$${r.totals.total_feed.toFixed(2)}</strong></td></tr>
+        <tr><td>Total salud</td><td><strong>$${r.totals.total_health.toFixed(2)}</strong></td></tr>
+        <tr><td>Otros gastos</td><td><strong>$${r.totals.total_expenses.toFixed(2)}</strong></td></tr>
+        <tr style="font-weight:700"><td>Inversión total</td><td><strong>$${investment.toFixed(2)}</strong></td></tr>
+        <tr><td>Total ventas</td><td><strong>$${r.totals.total_sales.toFixed(2)}</strong></td></tr>
+        <tr style="font-weight:700;background:${profit >= 0 ? '#e8f5e9' : '#fbe9e7'}"><td>${profit >= 0 ? '✅ Ganancia' : '❌ Pérdida'}</td><td style="color:${profit >= 0 ? '#2e7d32' : '#c62828'}"><strong>$${profit.toFixed(2)}</strong></td></tr>
+      </table>
+      <h3 style="margin-top:12px">Cerdos del Lote</h3>
+      <table>
+        <tr><th>ID</th><th>Estado</th><th>Compra</th><th>Venta</th></tr>
+        ${r.pigs.map(p => `
+          <tr><td>${p.identifier}</td><td><span class="badge badge-${p.status}">${p.status}</span></td>
+          <td>$${(p.purchase_cost || 0).toFixed(2)}</td>
+          <td>${p.status === 'sold' ? '💲 Vendido' : '-'}</td></tr>
+        `).join('')}
+      </table>
+    `;
+  },
+  async compareBatches() {
+    const ids = [1,2,3].map(i => parseInt(document.getElementById(`compareBatch${i}`).value)).filter(Boolean);
+    if (ids.length < 2) { document.getElementById('compareResult').innerHTML = '<div class="alert alert-warning">Selecciona al menos 2 lotes para comparar</div>'; return; }
+    const data = await API.post('/api/reports/compare-batches', { batch_ids: ids });
+    const c = document.getElementById('compareResult');
+    c.innerHTML = `
+      <hr style="margin:12px 0">
+      <h3>📊 Comparación de Lotes</h3>
+      <table>
+        <tr><th>Indicador</th>${data.map(d => `<th>${d.batch.name}</th>`).join('')}</tr>
+        <tr><td>Cerdos</td>${data.map(d => `<td>${d.pigCount}</td>`).join('')}</tr>
+        <tr><td>Vendidos</td>${data.map(d => `<td>${d.soldCount}</td>`).join('')}</tr>
+        <tr><td>Muertos</td>${data.map(d => `<td style="color:#c62828">${d.deadCount}</td>`).join('')}</tr>
+        <tr><td>Compra</td>${data.map(d => `<td>$${d.total_purchase.toFixed(2)}</td>`).join('')}</tr>
+        <tr><td>Alimento</td>${data.map(d => `<td>$${d.total_feed.toFixed(2)}</td>`).join('')}</tr>
+        <tr><td>Salud</td>${data.map(d => `<td>$${d.total_health.toFixed(2)}</td>`).join('')}</tr>
+        <tr><td>Gastos</td>${data.map(d => `<td>$${d.total_expenses.toFixed(2)}</td>`).join('')}</tr>
+        <tr style="font-weight:700"><td>Inversión</td>${data.map(d => `<td>$${(d.total_purchase + d.total_feed + d.total_health + d.total_expenses).toFixed(2)}</td>`).join('')}</tr>
+        <tr style="font-weight:700"><td>Ventas</td>${data.map(d => `<td>$${d.total_sales.toFixed(2)}</td>`).join('')}</tr>
+        ${(() => {
+          const profits = data.map(d => d.total_sales - d.total_purchase - d.total_feed - d.total_health - d.total_expenses);
+          const maxProfit = Math.max(...profits);
+          const bestIdx = profits.indexOf(maxProfit);
+          return `<tr style="font-weight:700"><td>🥇 Ganancia</td>${profits.map((p, i) =>
+            `<td style="color:${p >= 0 ? '#2e7d32' : '#c62828'};background:${i === bestIdx && maxProfit > 0 ? '#fff8e1' : 'transparent'}">${p >= 0 ? '+' : ''}$${p.toFixed(2)}${i === bestIdx && maxProfit > 0 ? ' 🏆' : ''}</td>`
+          ).join('')}</tr>`;
+        })()}
+        <tr><td>Costo x cerdo</td>${data.map(d => `<td>$${d.pigCount > 0 ? ((d.total_purchase + d.total_feed + d.total_health + d.total_expenses) / d.pigCount).toFixed(2) : 0}</td>`).join('')}</tr>
+      </table>
+    `;
   }
 };

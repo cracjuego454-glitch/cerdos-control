@@ -71,5 +71,8 @@ const API = {
 
   // Reports
   getSummary() { return this.get('/api/reports/summary'); },
-  getPigReport(id) { return this.get(`/api/reports/pig/${id}`); }
+  getPigReport(id) { return this.get(`/api/reports/pig/${id}`); },
+
+  // Death
+  recordDeath(pigId, data) { return this.post(`/api/pigs/${pigId}/death`, data); }
 };

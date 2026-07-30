@@ -1,6 +1,6 @@
 const App = {
   currentPage: 'dashboard',
-  pages: { dashboard: Dashboard, pigs: Pigs, feeding: Feeding, weight: Weight, health: Health, expenses: Expenses, sales: Sales, partners: Partners, reports: Reports, batches: Batches, inventory: Inventory, logbook: Logbook },
+  pages: { dashboard: Dashboard, pigs: Pigs, feeding: Feeding, weight: Weight, health: Health, expenses: Expenses, sales: Sales, partners: Partners, reports: Reports, batches: Batches, inventory: Inventory, logbook: Logbook, reproduction: Reproduction, deaths: Deaths },
 
   enterApp() {
     document.getElementById('welcome-screen').classList.add('fade-out');

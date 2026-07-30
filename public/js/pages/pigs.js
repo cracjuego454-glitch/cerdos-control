@@ -9,16 +9,18 @@ const Pigs = {
       <div class="card">
         <div class="table-container">
           <table>
-            <tr><th>ID</th><th>Nombre</th><th>Raza</th><th>Compra</th><th>Costo</th><th>Estado</th><th>Lote</th><th>Acciones</th></tr>
-            ${this.pigs.length ? this.pigs.map(p => `
+            <tr><th>ID</th><th>Nombre</th><th>Sexo</th><th>Raza</th><th>Compra</th><th>Costo</th><th>Estado</th><th>Lote</th><th>Acciones</th></tr>
+              ${this.pigs.length ? this.pigs.map(p => `
               <tr>
-                <td>${p.identifier}</td><td>${p.name || '-'}</td><td>${p.breed || '-'}</td>
+                <td>${p.identifier}</td><td>${p.name || '-'}</td>
+                <td>${p.sex === 'hembra' ? '♀ Hembra' : p.sex === 'macho' ? '♂ Macho' : '-'}</td>
+                <td>${p.breed || '-'}</td>
                 <td>${p.purchase_date || '-'}</td><td>$${(p.purchase_cost || 0).toFixed(2)}</td>
                 <td><span class="badge badge-${p.status}">${p.status}</span></td>
                 <td>${p.batch_name || '-'}</td>
                 <td><button class="btn btn-sm btn-primary" onclick="Pigs.openForm(${p.id})">✏️</button> <button class="btn btn-sm btn-danger" onclick="Pigs.delete(${p.id})">🗑️</button></td>
               </tr>
-            `).join('') : '<tr><td colspan="8" class="empty"><p>No hay cerdos registrados</p></td></tr>'}
+            `).join('') : '<tr><td colspan="9" class="empty"><p>No hay cerdos registrados</p></td></tr>'}
           </table>
         </div>
       </div>
@@ -32,7 +34,15 @@ const Pigs = {
               <div class="form-group"><label>Nombre</label><input type="text" name="name" id="pigName" placeholder="Opcional"></div>
             </div>
             <div class="form-row">
+              <div class="form-group"><label>Sexo</label>
+                <select name="sex" id="pigSex">
+                  <option value="macho">♂ Macho</option>
+                  <option value="hembra">♀ Hembra</option>
+                </select>
+              </div>
               <div class="form-group"><label>Raza</label><input type="text" name="breed" id="pigBreed"></div>
+            </div>
+            <div class="form-row">
               <div class="form-group"><label>Fecha de Nacimiento</label><input type="date" name="birth_date" id="pigBirth"></div>
             </div>
             <div class="form-row">
@@ -67,6 +77,7 @@ const Pigs = {
       document.getElementById('pigId').value = p.id;
       document.getElementById('pigIdentifier').value = p.identifier;
       document.getElementById('pigName').value = p.name || '';
+      document.getElementById('pigSex').value = p.sex || 'macho';
       document.getElementById('pigBreed').value = p.breed || '';
       document.getElementById('pigBirth').value = p.birth_date || '';
       document.getElementById('pigPurchaseDate').value = p.purchase_date || '';
@@ -85,6 +96,7 @@ const Pigs = {
       id: id ? parseInt(id) : null,
       identifier: document.getElementById('pigIdentifier').value,
       name: document.getElementById('pigName').value,
+      sex: document.getElementById('pigSex').value,
       breed: document.getElementById('pigBreed').value,
       birth_date: document.getElementById('pigBirth').value || null,
       purchase_date: document.getElementById('pigPurchaseDate').value || null,
