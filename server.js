@@ -261,6 +261,68 @@ app.get('/api/reports/pig/:id', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ========== PARTNERS API ==========
+app.get('/api/partners', (req, res) => {
+  try {
+    const partners = db.prepare(`
+      SELECT p.*, COALESCE(SUM(pt.amount),0) as total_returned
+      FROM partners p LEFT JOIN partner_transactions pt ON p.id = pt.partner_id AND pt.type = 'return'
+      GROUP BY p.id ORDER BY p.name
+    `).all();
+    res.json(partners);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/partners/info', (req, res) => {
+  try {
+    const partners = db.prepare('SELECT * FROM partners ORDER BY name').all();
+    const totalInvestment = partners.reduce((s, p) => s + p.investment, 0);
+    res.json({ partners, totalInvestment });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/partners', (req, res) => {
+  try {
+    const { name, investment, investment_type, date, phone, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+    db.prepare('INSERT INTO partners (name, investment, investment_type, date, phone, notes) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(name, investment || 0, investment_type || 'capital', date || null, phone || null, notes || null);
+    const row = db.prepare('SELECT last_insert_rowid() as id').get();
+    res.json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/partners/:id', (req, res) => {
+  try {
+    const { name, investment, investment_type, date, phone, notes } = req.body;
+    db.prepare("UPDATE partners SET name=?, investment=?, investment_type=?, date=?, phone=?, notes=?, updated_at=datetime('now','localtime') WHERE id=?")
+      .run(name, investment, investment_type, date, phone, notes, req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/partners/:id', (req, res) => {
+  try { db.prepare('DELETE FROM partners WHERE id = ?').run(req.params.id); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Partner transactions
+app.get('/api/partners/:id/transactions', (req, res) => {
+  try {
+    res.json(db.prepare('SELECT * FROM partner_transactions WHERE partner_id = ? ORDER BY date DESC').all(req.params.id));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/partners/:id/transactions', (req, res) => {
+  try {
+    const { date, type, amount, description, notes } = req.body;
+    if (!date || !type || !amount) return res.status(400).json({ error: 'date, type y amount requeridos' });
+    db.prepare('INSERT INTO partner_transactions (partner_id, date, type, amount, description, notes) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(req.params.id, date, type, amount, description || null, notes || null);
+    const row = db.prepare('SELECT last_insert_rowid() as id').get();
+    res.json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ========== BACKUP / RESTORE ==========
 app.get('/api/backup', (req, res) => {
   try {
@@ -272,7 +334,9 @@ app.get('/api/backup', (req, res) => {
       expenses: db.prepare('SELECT * FROM expenses').all(),
       sales: db.prepare('SELECT * FROM sales').all(),
       weight: db.prepare('SELECT * FROM weight_records').all(),
-      health: db.prepare('SELECT * FROM health_records').all()
+      health: db.prepare('SELECT * FROM health_records').all(),
+      partners: db.prepare('SELECT * FROM partners').all(),
+      partner_transactions: db.prepare('SELECT * FROM partner_transactions').all()
     };
     res.json(backup);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -283,7 +347,7 @@ app.post('/api/restore', (req, res) => {
     const data = req.body;
     if (!data || !data.pigs) return res.status(400).json({ error: 'Respaldos inválido' });
     db.exec('PRAGMA foreign_keys=OFF');
-    ['health_records', 'weight_records', 'sales', 'expenses', 'feeding_records', 'pigs'].forEach(t => {
+    ['partner_transactions', 'partners', 'health_records', 'weight_records', 'sales', 'expenses', 'feeding_records', 'pigs'].forEach(t => {
       db.prepare(`DELETE FROM ${t}`).run();
     });
     const insertPig = db.prepare('INSERT INTO pigs (id, identifier, name, breed, birth_date, purchase_date, purchase_cost, status, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -298,8 +362,12 @@ app.post('/api/restore', (req, res) => {
     (data.weight || []).forEach(r => insertWeight.run(r.id, r.pig_id, r.date, r.weight_kg, r.notes, r.created_at));
     const insertHealth = db.prepare('INSERT INTO health_records (id, pig_id, date, record_type, description, medicine, cost, next_due_date, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     (data.health || []).forEach(r => insertHealth.run(r.id, r.pig_id, r.date, r.record_type, r.description, r.medicine, r.cost, r.next_due_date, r.notes, r.created_at));
+    const insertPartner = db.prepare('INSERT INTO partners (id, name, investment, investment_type, date, phone, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    (data.partners || []).forEach(r => insertPartner.run(r.id, r.name, r.investment, r.investment_type, r.date, r.phone, r.notes, r.created_at, r.updated_at));
+    const insertPTx = db.prepare('INSERT INTO partner_transactions (id, partner_id, date, type, amount, description, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    (data.partner_transactions || []).forEach(r => insertPTx.run(r.id, r.partner_id, r.date, r.type, r.amount, r.description, r.notes, r.created_at));
     db.exec('PRAGMA foreign_keys=ON');
-    res.json({ ok: true, count: { pigs: data.pigs.length, feeding: (data.feeding || []).length, expenses: (data.expenses || []).length, sales: (data.sales || []).length, weight: (data.weight || []).length, health: (data.health || []).length } });
+    res.json({ ok: true, count: { pigs: data.pigs.length, feeding: (data.feeding || []).length, expenses: (data.expenses || []).length, sales: (data.sales || []).length, weight: (data.weight || []).length, health: (data.health || []).length, partners: (data.partners || []).length } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

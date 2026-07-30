@@ -87,6 +87,30 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now','localtime')),
     FOREIGN KEY (pig_id) REFERENCES pigs(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS partners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    investment REAL DEFAULT 0,
+    investment_type TEXT DEFAULT 'capital',
+    date TEXT,
+    phone TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS partner_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE
+  );
 `);
 
 // Create indexes
@@ -97,6 +121,7 @@ const indexSqls = [
   'CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date)',
   'CREATE INDEX IF NOT EXISTS idx_weight_pig ON weight_records(pig_id)',
   'CREATE INDEX IF NOT EXISTS idx_health_pig ON health_records(pig_id)',
+  'CREATE INDEX IF NOT EXISTS idx_partner_tx ON partner_transactions(partner_id)',
 ];
 indexSqls.forEach(sql => db.exec(sql));
 
