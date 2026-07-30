@@ -128,9 +128,8 @@ const Batches = {
   showQR(id) {
     const batch = this.batches.find(b => b.id === id);
     if (!batch) return;
-    const url = encodeURIComponent('https://cerdos-control.onrender.com');
-    const label = encodeURIComponent(`Lote: ${batch.name}`);
-    document.getElementById('qrImage').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${url}%23${id}" alt="QR ${batch.name}" style="border-radius:8px;background:#fff;padding:8px">`;
+    const baseUrl = 'https://cerdos-control.onrender.com/batch-view.html?id=';
+    document.getElementById('qrImage').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(baseUrl + id)}" alt="QR ${batch.name}" style="border-radius:8px;background:#fff;padding:8px">`;
     document.getElementById('qrText').textContent = `📍 ${batch.name} · Escanea para abrir la app`;
     document.getElementById('qrModal').classList.add('open');
   },
