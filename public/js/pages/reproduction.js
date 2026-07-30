@@ -85,7 +85,19 @@ const Reproduction = {
       </div>
     `;
   },
-  afterRender() {},
+  afterRender() {
+    const matingInput = document.getElementById('reproductionMatingDate');
+    const expectedInput = document.getElementById('reproductionExpectedDate');
+    if (matingInput && expectedInput) {
+      matingInput.addEventListener('change', () => {
+        if (matingInput.value && !expectedInput.value) {
+          const d = new Date(matingInput.value);
+          d.setDate(d.getDate() + 114);
+          expectedInput.value = d.toISOString().split('T')[0];
+        }
+      });
+    }
+  },
   calcResult() {
     const alive = parseInt(document.getElementById('reproductionPigletsAlive').value) || 0;
     const dead = parseInt(document.getElementById('reproductionPigletsDead').value) || 0;
