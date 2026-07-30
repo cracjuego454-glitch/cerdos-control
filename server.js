@@ -734,7 +734,7 @@ app.get('/api/reports/batch/:id', (req, res) => {
     const pigs = db.prepare('SELECT * FROM pigs WHERE batch_id = ? ORDER BY identifier').all(req.params.id);
     const totals = db.prepare(`
       SELECT
-        COALESCE(SUM(p.purchase_cost),0) as total_purchase,
+        COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE batch_id = ?),0) as total_purchase,
         COALESCE((SELECT SUM(f.total_cost) FROM feeding_records f JOIN pigs p2 ON f.pig_id = p2.id WHERE p2.batch_id = ?),0) as total_feed,
         COALESCE((SELECT SUM(h.cost) FROM health_records h JOIN pigs p2 ON h.pig_id = p2.id WHERE p2.batch_id = ?),0) as total_health,
         COALESCE((SELECT SUM(e.amount) FROM expenses e JOIN pigs p2 ON e.pig_id = p2.id WHERE p2.batch_id = ?),0) as total_expenses,
@@ -757,7 +757,7 @@ app.post('/api/reports/compare-batches', (req, res) => {
       const deadCount = db.prepare("SELECT COUNT(*) as c FROM pigs WHERE batch_id = ? AND status='dead'").get(id).c;
       const totals = db.prepare(`
         SELECT
-          COALESCE(SUM(p.purchase_cost),0) as total_purchase,
+          COALESCE((SELECT SUM(purchase_cost) FROM pigs WHERE batch_id = ?),0) as total_purchase,
           COALESCE((SELECT SUM(f.total_cost) FROM feeding_records f JOIN pigs p2 ON f.pig_id = p2.id WHERE p2.batch_id = ?),0) as total_feed,
           COALESCE((SELECT SUM(h.cost) FROM health_records h JOIN pigs p2 ON h.pig_id = p2.id WHERE p2.batch_id = ?),0) as total_health,
           COALESCE((SELECT SUM(e.amount) FROM expenses e JOIN pigs p2 ON e.pig_id = p2.id WHERE p2.batch_id = ?),0) as total_expenses,
