@@ -15,7 +15,11 @@ const Batches = {
                 <td><strong>${b.name}</strong></td>
                 <td>${b.start_date || '-'}</td>
                 <td>${b.pig_count}</td>
-                <td><button class="btn btn-sm btn-primary" onclick="event.stopPropagation();Batches.openForm(${b.id})">✏️</button> <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();Batches.delete(${b.id})">🗑️</button></td>
+                <td>
+                  <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();Batches.openForm(${b.id})">✏️</button>
+                  <button class="btn btn-sm btn-info" onclick="event.stopPropagation();Batches.showQR(${b.id})">📱 QR</button>
+                  <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();Batches.delete(${b.id})">🗑️</button>
+                </td>
               </tr>
             `).join('') : '<tr><td colspan="4" class="empty"><p>No hay lotes registrados</p></td></tr>'}
           </table>
@@ -28,6 +32,17 @@ const Batches = {
             <table id="batchPigsTable">
               <tr><th>ID</th><th>Nombre</th><th>Raza</th><th>Compra</th><th>Estado</th></tr>
             </table>
+          </div>
+        </div>
+      </div>
+      <div id="qrModal" class="modal">
+        <div class="modal-content" style="text-align:center">
+          <h2>📱 QR del Lote</h2>
+          <div id="qrImage" style="margin:16px 0;min-height:200px"></div>
+          <p id="qrText" style="color:#999;font-size:0.85rem"></p>
+          <div class="form-actions" style="justify-content:center">
+            <button class="btn" onclick="Batches.closeQR()">Cerrar</button>
+            <button class="btn btn-primary" onclick="Batches.printQR()">🖨️ Imprimir</button>
           </div>
         </div>
       </div>
@@ -109,5 +124,22 @@ const Batches = {
   hidePigs() {
     document.getElementById('batchPigs').style.display = 'none';
     this.selectedBatchId = null;
+  },
+  showQR(id) {
+    const batch = this.batches.find(b => b.id === id);
+    if (!batch) return;
+    const url = encodeURIComponent('https://cerdos-control.onrender.com');
+    const label = encodeURIComponent(`Lote: ${batch.name}`);
+    document.getElementById('qrImage').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${url}%23${id}" alt="QR ${batch.name}" style="border-radius:8px;background:#fff;padding:8px">`;
+    document.getElementById('qrText').textContent = `📍 ${batch.name} · Escanea para abrir la app`;
+    document.getElementById('qrModal').classList.add('open');
+  },
+  closeQR() { document.getElementById('qrModal').classList.remove('open'); },
+  printQR() {
+    const img = document.getElementById('qrImage').querySelector('img');
+    if (!img) return;
+    const w = window.open('', '', 'width=300,height=300');
+    w.document.write(`<html><head><title>QR Lote</title></head><body style="text-align:center;padding:20px"><img src="${img.src}" style="width:250px"><p>${document.getElementById('qrText').textContent}</p></body></html>`);
+    w.print();
   }
 };

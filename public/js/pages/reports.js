@@ -59,6 +59,36 @@ const Reports = {
         <div class="chart-container"><canvas id="chartFeedingReport"></canvas></div>
         <div id="feedingAnalysis"></div>
       </div>
+      <div class="grid-2">
+        <div class="card">
+          <h2>📈 Proyección de Ventas</h2>
+          <p><small>Estima cuándo cada cerdo alcanzará peso de venta</small></p>
+          <div class="form-group">
+            <label>Peso objetivo (kg)</label>
+            <div style="display:flex;gap:8px">
+              <input type="number" id="projectTargetWeight" value="100" style="flex:1">
+              <button class="btn btn-primary" onclick="Reports.loadSalesProjection()">Calcular</button>
+            </div>
+          </div>
+          <div id="salesProjection"></div>
+        </div>
+        <div class="card">
+          <h2>🥣 Consumo Proyectado</h2>
+          <p><small>Proyección de alimento necesario</small></p>
+          <div class="form-group">
+            <label>Días a proyectar</label>
+            <div style="display:flex;gap:8px">
+              <select id="projectDays">
+                <option value="7">7 días</option>
+                <option value="14">14 días</option>
+                <option value="30" selected>30 días</option>
+              </select>
+              <button class="btn btn-primary" onclick="Reports.loadFeedProjection()">Calcular</button>
+            </div>
+          </div>
+          <div id="feedProjection"></div>
+        </div>
+      </div>
     `;
   },
   afterRender() {},
@@ -162,6 +192,46 @@ const Reports = {
           <td>$${(p.purchase_cost || 0).toFixed(2)}</td>
           <td>${p.status === 'sold' ? '💲 Vendido' : '-'}</td></tr>
         `).join('')}
+      </table>
+    `;
+  },
+  async loadSalesProjection() {
+    const target = parseInt(document.getElementById('projectTargetWeight').value) || 100;
+    const data = await API.get(`/api/reports/sales-projection?target_weight=${target}`);
+    const c = document.getElementById('salesProjection');
+    const readyPigs = data.filter(p => p.daysToTarget !== null && p.daysToTarget <= 0);
+    const nearPigs = data.filter(p => p.daysToTarget !== null && p.daysToTarget > 0 && p.daysToTarget <= 30);
+    const rest = data.filter(p => p.daysToTarget === null || p.daysToTarget > 30);
+    c.innerHTML = `
+      ${readyPigs.length ? `<div class="alert alert-success"><strong>⚠️ ${readyPigs.length} cerdo(s) listo(s) para vender!</strong></div>` : ''}
+      ${data.length ? `
+      <table>
+        <tr><th>ID</th><th>Peso actual</th><th>Ganancia/día</th><th>Falta</th><th>Proyección</th></tr>
+        ${data.map(p => `
+          <tr style="background:${p.daysToTarget !== null && p.daysToTarget <= 0 ? '#e8f5e9' : p.daysToTarget !== null && p.daysToTarget <= 30 ? '#fff8e1' : ''}">
+            <td>${p.identifier}</td>
+            <td>${p.current_weight} kg</td>
+            <td>${p.avgDailyGain > 0 ? p.avgDailyGain + ' kg' : '🐣 sin datos'}</td>
+            <td>${p.daysToTarget !== null ? p.remainingKg + ' kg (' + p.daysToTarget + ' días)' : '-'}</td>
+            <td>${p.projectedDate || '-'}</td>
+          </tr>
+        `).join('')}
+      </table>` : '<p>No hay cerdos activos con datos de peso</p>'}
+      <p style="color:#999;margin-top:8px;font-size:0.85rem">✅ Fondo verde = listo para vender · 🟡 Amarillo = próximo mes</p>
+    `;
+  },
+  async loadFeedProjection() {
+    const days = parseInt(document.getElementById('projectDays').value);
+    const data = await API.get(`/api/reports/feed-projection?days=${days}`);
+    const c = document.getElementById('feedProjection');
+    c.innerHTML = `
+      <table>
+        <tr><td>Cerdos activos</td><td><strong>${data.activePigs}</strong></td></tr>
+        <tr><td>Cerdos con registro de comida</td><td><strong>${data.pigsWithFeed}</strong></td></tr>
+        <tr><td>Consumo promedio / cerdo / día</td><td><strong>${data.avgPerPig} kg</strong></td></tr>
+        <tr style="font-weight:700"><td>Total proyectado (${data.days} días)</td><td><strong>${data.totalProjected} kg</strong></td></tr>
+        <tr><td>Costo promedio x kg</td><td><strong>$${data.avgCostPerKg.toFixed(2)}</strong></td></tr>
+        <tr style="font-weight:700"><td>Costo total proyectado</td><td><strong>$${data.costProjected.toFixed(2)}</td></tr>
       </table>
     `;
   },

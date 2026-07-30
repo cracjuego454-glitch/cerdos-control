@@ -190,6 +190,61 @@ db.exec(`
   );
 `);
 
+// Feed orders
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feed_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier TEXT NOT NULL,
+    order_date TEXT NOT NULL,
+    delivery_date TEXT,
+    item_name TEXT NOT NULL,
+    quantity_ordered REAL NOT NULL,
+    quantity_received REAL DEFAULT 0,
+    unit_cost REAL DEFAULT 0,
+    total_cost REAL DEFAULT 0,
+    status TEXT DEFAULT 'pending',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+`);
+
+// Task templates
+db.exec(`
+  CREATE TABLE IF NOT EXISTS task_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0
+  );
+`);
+
+// Daily task logs
+db.exec(`
+  CREATE TABLE IF NOT EXISTS daily_task_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    task_template_id INTEGER NOT NULL,
+    completed INTEGER DEFAULT 0,
+    notes TEXT,
+    FOREIGN KEY (task_template_id) REFERENCES task_templates(id) ON DELETE CASCADE
+  );
+`);
+
+// Insert default task templates
+const defaultTasks = [
+  ['Alimentar cerdos', 'Alimentación', 1],
+  ['Revisar agua', 'Alimentación', 2],
+  ['Revisar corrales', 'Limpieza', 3],
+  ['Limpiar comederos', 'Limpieza', 4],
+  ['Revisar salud general', 'Salud', 5],
+  ['Aplicar medicamentos', 'Salud', 6],
+  ['Registrar pesos', 'Registro', 7],
+];
+defaultTasks.forEach(([name, cat, order]) => {
+  try { db.prepare('INSERT OR IGNORE INTO task_templates (name, category, sort_order) VALUES (?, ?, ?)').run(name, cat, order); } catch (e) {}
+});
+
 // Insert default inventory categories
 const cats = ['Alimento', 'Medicina', 'Equipo', 'Otros'];
 cats.forEach(name => {
@@ -207,6 +262,8 @@ const indexSqls = [
   'CREATE INDEX IF NOT EXISTS idx_partner_tx ON partner_transactions(partner_id)',
   'CREATE INDEX IF NOT EXISTS idx_reproduction_sow ON reproduction_records(sow_id)',
   'CREATE INDEX IF NOT EXISTS idx_reproduction_date ON reproduction_records(mating_date)',
+  'CREATE INDEX IF NOT EXISTS idx_feed_orders_date ON feed_orders(order_date)',
+  'CREATE INDEX IF NOT EXISTS idx_daily_tasks_date ON daily_task_logs(date)',
 ];
 indexSqls.forEach(sql => db.exec(sql));
 

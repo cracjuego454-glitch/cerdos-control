@@ -77,7 +77,18 @@ table tr:hover { background: #f5f8ff; }
 .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
 .badge-active { background: #e8f5e9; color: #2e7d32; }
 .badge-sold { background: #fff3e0; color: #e65100; }
-.badge-deceased { background: #fbe9e7; color: #c62828; }
+.badge-dead { background: #fbe9e7; color: #c62828; }
+.badge-warning { background: #fff8e1; color: #f57f17; }
+.badge-pending { background: #fff8e1; color: #f57f17; }
+.badge-received { background: #e8f5e9; color: #2e7d32; }
+
+/* Task items */
+.task-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: background .2s; }
+.task-item:hover { background: #f5f5f5; }
+.task-done { opacity: 0.6; text-decoration: line-through; }
+.task-check { font-size: 1.2rem; min-width: 28px; }
+.task-name { flex: 1; }
+.task-notes { font-size: 0.8rem; color: #999; cursor: pointer; }
 
 /* Charts */
 .chart-container { position: relative; height: 300px; }
