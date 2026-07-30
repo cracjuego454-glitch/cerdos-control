@@ -1,12 +1,42 @@
 const App = {
   currentPage: 'dashboard',
+  farms: [],
   pages: { dashboard: Dashboard, pigs: Pigs, feeding: Feeding, weight: Weight, health: Health, expenses: Expenses, sales: Sales, partners: Partners, reports: Reports, batches: Batches, inventory: Inventory, logbook: Logbook, reproduction: Reproduction, deaths: Deaths, feedorders: FeedOrders, dailytasks: DailyTasks, familytree: FamilyTree },
+
+  async loadFarms() {
+    try {
+      this.farms = await API.get('/api/farms');
+      const sel = document.getElementById('farmSelector');
+      if (!sel) return;
+      const current = API.getFarmId();
+      sel.innerHTML = '<option value="">🌍 Todas las granjas</option>' +
+        this.farms.map(f => `<option value="${f.id}" ${current == f.id ? 'selected' : ''}>${f.name}</option>`).join('') +
+        '<option value="new">➕ Nueva granja...</option>';
+    } catch (e) { console.error('Error loading farms:', e); }
+  },
+
+  async switchFarm(id) {
+    if (id === 'new') {
+      const name = prompt('Nombre de la nueva granja:');
+      if (!name) { this.loadFarms(); return; }
+      const loc = prompt('Ubicación (opcional):') || '';
+      const r = await API.post('/api/farms', { name, location: loc });
+      API.setFarmId(r.id);
+    } else if (id) {
+      API.setFarmId(id);
+    } else {
+      API.setFarmId('');
+    }
+    this.loadFarms();
+    this.navigate(this.currentPage);
+  },
 
   enterApp() {
     document.getElementById('welcome-screen').classList.add('fade-out');
     setTimeout(() => {
       document.getElementById('welcome-screen').style.display = 'none';
       document.getElementById('app').style.display = 'flex';
+      this.loadFarms();
       this.navigate('dashboard');
     }, 500);
   },

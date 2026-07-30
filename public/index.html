@@ -23,6 +23,11 @@
       <div class="sidebar-header">
         <h1>🐷 Cerdos by LOMI</h1>
       </div>
+      <div style="padding:8px 12px">
+        <select id="farmSelector" onchange="App.switchFarm(this.value)" style="width:100%;padding:6px;border-radius:6px;border:1px solid #ddd;font-size:0.85rem">
+          <option value="">🌍 Cargando...</option>
+        </select>
+      </div>
       <nav>
         <a href="#" data-page="dashboard" class="active">📊 Dashboard</a>
         <a href="#" data-page="pigs">🐖 Cerdos</a>

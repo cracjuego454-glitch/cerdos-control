@@ -245,6 +245,30 @@ defaultTasks.forEach(([name, cat, order]) => {
   try { db.prepare('INSERT OR IGNORE INTO task_templates (name, category, sort_order) VALUES (?, ?, ?)').run(name, cat, order); } catch (e) {}
 });
 
+// Farms table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS farms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    location TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+`);
+try { db.prepare("INSERT OR IGNORE INTO farms (id, name, location) VALUES (1, 'Granja Principal', '')").run(); } catch (e) {}
+
+// Add farm_id to all tables
+const farmCols = [
+  'pigs', 'batches', 'expenses', 'sales', 'feeding_records', 'health_records',
+  'weight_records', 'inventory_items', 'daily_logs', 'partners', 'reproduction_records',
+  'inventory_categories'
+];
+farmCols.forEach(t => {
+  try { db.exec(`ALTER TABLE ${t} ADD COLUMN farm_id INTEGER DEFAULT 1 REFERENCES farms(id) ON DELETE CASCADE`); } catch (e) {}
+});
+try { db.exec('ALTER TABLE feed_orders ADD COLUMN farm_id INTEGER DEFAULT 1 REFERENCES farms(id) ON DELETE CASCADE'); } catch (e) {}
+// inventory_movements don't need farm_id (they follow the item)
+
 // Insert default inventory categories
 const cats = ['Alimento', 'Medicina', 'Equipo', 'Otros'];
 cats.forEach(name => {
