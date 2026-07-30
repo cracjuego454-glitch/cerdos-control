@@ -2,6 +2,7 @@ const Feeding = {
   pigs: [], feedItems: [],
   async render() {
     this.pigs = await API.getPigs('active');
+    this.batches = await API.get('/api/batches');
     const categories = await API.get('/api/inventory/categories');
     const feedCat = categories.find(c => c.name === 'Alimento');
     this.feedItems = feedCat ? await API.get(`/api/inventory/items?category_id=${feedCat.id}`) : [];
@@ -29,11 +30,30 @@ const Feeding = {
           <form onsubmit="Feeding.save(event)">
             <input type="hidden" id="feedingItemId">
             <div class="form-group">
-              <label>Cerdo *</label>
-              <select id="feedingPigId" required>
-                <option value="">Seleccionar...</option>
-                ${this.pigs.map(p => `<option value="${p.id}">${p.identifier}${p.name ? ' - ' + p.name : ''}</option>`).join('')}
+              <label>Modo</label>
+              <select id="feedingMode" onchange="Feeding.toggleMode()">
+                <option value="single">🐖 Un solo cerdo</option>
+                <option value="batch">🏷️ Lote completo</option>
               </select>
+            </div>
+            <div id="feedingSingle">
+              <div class="form-group">
+                <label>Cerdo *</label>
+                <select id="feedingPigId">
+                  <option value="">Seleccionar...</option>
+                  ${this.pigs.map(p => `<option value="${p.id}">${p.identifier}${p.name ? ' - ' + p.name : ''}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div id="feedingBatch" style="display:none">
+              <div class="form-group">
+                <label>Lote *</label>
+                <select id="feedingBatchId" onchange="Feeding.loadBatchPigs()">
+                  <option value="">Seleccionar...</option>
+                  ${this.batches.map(b => `<option value="${b.id}">${b.name}</option>`).join('')}
+                </select>
+                <div id="feedingBatchInfo" style="font-size:0.85rem;margin-top:4px"></div>
+              </div>
             </div>
             <div class="form-row">
               <div class="form-group"><label>Fecha *</label><input type="date" id="feedingDate" required value="${new Date().toISOString().split('T')[0]}"></div>
@@ -79,29 +99,78 @@ const Feeding = {
       document.getElementById('feedingItemId').value = '';
     }
   },
-  openForm() { document.getElementById('feedingModal').classList.add('open'); },
+  async loadBatchPigs() {
+    const batchId = document.getElementById('feedingBatchId').value;
+    const info = document.getElementById('feedingBatchInfo');
+    const qtyInput = document.getElementById('feedingQty');
+    if (batchId) {
+      const pigs = await API.get(`/api/pigs?batch_id=${batchId}`);
+      document.getElementById('feedingPigId').value = '';
+      info.innerHTML = `<span style="color:#2e7d32">🐖 ${pigs.length} cerdos — se repartirá equitativamente</span>`;
+      qtyInput.oninput = () => {
+        const qty = parseFloat(qtyInput.value) || 0;
+        if (qty > 0 && pigs.length > 0) {
+          info.innerHTML = `<span style="color:#2e7d32">🐖 ${pigs.length} cerdos — <strong>${(qty/pigs.length).toFixed(2)} kg</strong> cada uno</span>`;
+        }
+      };
+    } else {
+      info.innerHTML = '';
+      qtyInput.oninput = null;
+    }
+  },
+  openForm() { 
+    document.getElementById('feedingModal').classList.add('open');
+    document.getElementById('feedingMode').value = 'single';
+    this.toggleMode();
+  },
+  toggleMode() {
+    const mode = document.getElementById('feedingMode').value;
+    document.getElementById('feedingSingle').style.display = mode === 'single' ? '' : 'none';
+    document.getElementById('feedingBatch').style.display = mode === 'batch' ? '' : 'none';
+    document.getElementById('feedingPigId').required = mode === 'single';
+    document.getElementById('feedingBatchId').required = mode === 'batch';
+  },
   closeForm() { document.getElementById('feedingModal').classList.remove('open'); },
   async save(e) {
     e.preventDefault();
+    const mode = document.getElementById('feedingMode').value;
     const qty = parseFloat(document.getElementById('feedingQty').value);
     const costPerKg = parseFloat(document.getElementById('feedingCost').value) || 0;
     const itemId = document.getElementById('feedingItemId').value;
-    const result = await API.saveFeeding({
-      pig_id: parseInt(document.getElementById('feedingPigId').value),
-      date: document.getElementById('feedingDate').value,
-      quantity_kg: qty,
-      food_type: document.getElementById('feedingType').value || null,
-      cost_per_kg: costPerKg,
-      notes: document.getElementById('feedingNotes').value || null
-    });
-    if (itemId) {
-      await API.post('/api/inventory/movements', {
-        item_id: parseInt(itemId),
-        date: document.getElementById('feedingDate').value,
-        type: 'out',
-        quantity: qty,
-        description: 'Consumo en alimentación'
+    const date = document.getElementById('feedingDate').value;
+    const foodType = document.getElementById('feedingType').value || null;
+    const notes = document.getElementById('feedingNotes').value || null;
+
+    if (mode === 'batch') {
+      const batchId = document.getElementById('feedingBatchId').value;
+      if (!batchId) return alert('Selecciona un lote');
+      const pigs = await API.get(`/api/pigs?batch_id=${batchId}`);
+      if (!pigs.length) return alert('El lote no tiene cerdos');
+      const perPig = qty / pigs.length;
+      for (const pig of pigs) {
+        await API.saveFeeding({
+          pig_id: pig.id, date, quantity_kg: perPig,
+          food_type: foodType, cost_per_kg: costPerKg, notes
+        });
+      }
+      if (itemId) {
+        await API.post('/api/inventory/movements', {
+          item_id: parseInt(itemId), date, type: 'out',
+          quantity: qty, description: 'Consumo por lote'
+        });
+      }
+    } else {
+      await API.saveFeeding({
+        pig_id: parseInt(document.getElementById('feedingPigId').value),
+        date, quantity_kg: qty, food_type: foodType,
+        cost_per_kg: costPerKg, notes
       });
+      if (itemId) {
+        await API.post('/api/inventory/movements', {
+          item_id: parseInt(itemId), date, type: 'out',
+          quantity: qty, description: 'Consumo en alimentación'
+        });
+      }
     }
     this.closeForm();
     App.navigate('feeding');
